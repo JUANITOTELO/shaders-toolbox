@@ -1,0 +1,10 @@
+# Deny direct access to database, config, and sensitive files
+<FilesMatch "\.(sqlite|db|sql|ini|env)$">
+  Order deny,allow
+  Deny from all
+</FilesMatch>
+
+<Files "database.php">
+  Order deny,allow
+  Deny from all
+</Files>
