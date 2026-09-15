@@ -10,7 +10,7 @@ interface FolderTreeProps {
   onCreateCategory: (name: string, parentId: number | null) => void;
   onDeleteCategory: (id: number) => void;
   onSelectPreset: (preset: ShaderPreset) => void;
-  onSaveCurrentToCategory: (categoryId: number | null) => void;
+  onSaveCurrentToCategory: (categoryId: number | null) => void | Promise<any>;
   zeroHeroTools?: ShaderTool[];
   onSelectTool?: (tool: ShaderTool) => void;
 }
@@ -41,9 +41,11 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
     setAllCustomPresets(allPresets);
     const map: Record<number, ShaderPreset[]> = {};
     allPresets.forEach(preset => {
-      const catId = preset.category_id || 2;
-      if (!map[catId]) map[catId] = [];
-      map[catId].push(preset);
+      if (preset.category_id !== null && preset.category_id !== undefined) {
+        const catId = Number(preset.category_id);
+        if (!map[catId]) map[catId] = [];
+        map[catId].push(preset);
+      }
     });
     setFolderPresets(map);
   };
@@ -66,13 +68,18 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
     setExpandedFolderIds(prev => ({ ...prev, [catId]: !prev[catId] }));
   };
 
-  const handleSaveToFolder = (catId: number | null, e: React.MouseEvent) => {
+  const handleSaveToFolder = async (catId: number | null, e: React.MouseEvent) => {
     e.stopPropagation();
-    onSaveCurrentToCategory(catId);
+    await onSaveCurrentToCategory(catId);
     setSavedBadgeFolderId(catId ?? -1);
+    if (catId) {
+      setExpandedFolderIds(prev => ({ ...prev, [catId]: true }));
+    } else {
+      setIsAllExpanded(true);
+    }
+    await fetchPresetsForCategories();
     setTimeout(() => {
       setSavedBadgeFolderId(null);
-      fetchPresetsForCategories();
     }, 2000);
   };
 

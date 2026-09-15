@@ -183,14 +183,18 @@ export const apiService = {
   // --- PRESETS CRUD ---
   async getPresets(categoryId?: number): Promise<ShaderPreset[]> {
     try {
-      const url = categoryId ? `/api/presets.php?category_id=${categoryId}` : '/api/presets.php';
+      const url = categoryId !== undefined ? `/api/presets.php?category_id=${categoryId}` : '/api/presets.php';
       const res = await fetch(url);
       if (!res.ok) throw new Error('Failed to fetch presets');
-      return await res.json();
+      const data: ShaderPreset[] = await res.json();
+      if (Array.isArray(data)) {
+        return data;
+      }
+      return [];
     } catch {
       const local = localStorage.getItem('local_presets');
       const presets: ShaderPreset[] = local ? JSON.parse(local) : [];
-      if (categoryId) return presets.filter(p => p.category_id === categoryId);
+      if (categoryId !== undefined) return presets.filter(p => Number(p.category_id) === Number(categoryId));
       return presets;
     }
   },
@@ -203,7 +207,9 @@ export const apiService = {
         body: JSON.stringify(preset)
       });
       if (!res.ok) throw new Error('Failed to create preset');
-      return await res.json();
+      const data = await res.json();
+      localStorage.removeItem('local_presets');
+      return data;
     } catch {
       const local = localStorage.getItem('local_presets');
       const presets: ShaderPreset[] = local ? JSON.parse(local) : [];
@@ -222,7 +228,9 @@ export const apiService = {
         body: JSON.stringify(preset)
       });
       if (!res.ok) throw new Error('Failed to update preset');
-      return await res.json();
+      const data = await res.json();
+      localStorage.removeItem('local_presets');
+      return data;
     } catch {
       const local = localStorage.getItem('local_presets');
       let presets: ShaderPreset[] = local ? JSON.parse(local) : [];
@@ -238,7 +246,9 @@ export const apiService = {
         method: 'DELETE'
       });
       if (!res.ok) throw new Error('Failed to delete preset');
-      return await res.json();
+      const data = await res.json();
+      localStorage.removeItem('local_presets');
+      return data;
     } catch {
       const local = localStorage.getItem('local_presets');
       let presets: ShaderPreset[] = local ? JSON.parse(local) : [];

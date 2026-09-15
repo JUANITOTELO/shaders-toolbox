@@ -15,7 +15,7 @@ interface SidebarToolListProps {
   onCreateCategory: (name: string, parentId: number | null) => void;
   onDeleteCategory: (id: number) => void;
   onSelectPreset: (preset: ShaderPreset) => void;
-  onSaveCurrentToCategory: (categoryId: number | null) => void;
+  onSaveCurrentToCategory: (categoryId: number | null) => void | Promise<any>;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   completedIds: string[];

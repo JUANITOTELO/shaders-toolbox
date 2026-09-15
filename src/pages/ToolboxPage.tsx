@@ -11,6 +11,22 @@ import { ToolModal } from '../components/organisms/ToolModal';
 import { ResizableSplitter } from '../components/atoms/ResizableSplitter';
 import { apiService } from '../services/apiService';
 
+const getToolCode = (tool: ShaderTool): string => {
+  if (!tool) return '';
+  const glsl = tool.glsl?.trim() || '';
+  const preview = tool.previewMain?.trim() || '';
+
+  if (!glsl) return preview;
+  if (!preview) return glsl;
+
+  // Avoid duplicating if preview already includes glsl or IDE header
+  if (preview.includes(glsl) || preview.startsWith('// ShaderStudio IDE:')) {
+    return preview;
+  }
+
+  return `// ShaderStudio IDE: ${tool.name}\n${glsl}\n\n${preview}`.trim();
+};
+
 export const ToolboxPage: React.FC = () => {
   const [tools, setTools] = useState<ShaderTool[]>(allTools);
   const [selectedTool, setSelectedTool] = useState<ShaderTool>(allTools[0]);
@@ -52,12 +68,7 @@ export const ToolboxPage: React.FC = () => {
     docs: 30
   });
 
-  const [code, setCode] = useState<string>(`
-// ShaderStudio IDE: ${selectedTool.name}
-${selectedTool.glsl}
-
-${selectedTool.previewMain}
-  `.trim());
+  const [code, setCode] = useState<string>(() => getToolCode(allTools[0]));
 
   const [markdownDoc, setMarkdownDoc] = useState<string>(selectedTool.markdownDoc);
 
@@ -66,14 +77,19 @@ ${selectedTool.previewMain}
     loadCategories();
   }, []);
 
-  const loadTools = async () => {
+  const loadTools = async (selectId?: string) => {
     const loaded = await apiService.getTools();
     if (loaded && loaded.length > 0) {
       setTools(loaded);
-      setSelectedTool(prev => {
-        const match = loaded.find(t => t.id === prev.id);
-        return match || loaded[0];
-      });
+      const targetId = selectId || selectedTool.id;
+      const match = loaded.find(t => t.id === targetId) || loaded[0];
+      setSelectedTool(match);
+      if (!isPresetMode) {
+        setPresetName(match.name);
+        setPresetDesc(match.description);
+        setCode(getToolCode(match));
+        setMarkdownDoc(match.markdownDoc || '');
+      }
     }
   };
 
@@ -123,13 +139,8 @@ ${selectedTool.previewMain}
     setPresetDesc(tool.description);
     setCurrentId(undefined);
     setIsPresetMode(false);
-    setCode(`
-// ShaderStudio IDE: ${tool.name}
-${tool.glsl}
-
-${tool.previewMain}
-    `.trim());
-    setMarkdownDoc(tool.markdownDoc);
+    setCode(getToolCode(tool));
+    setMarkdownDoc(tool.markdownDoc || '');
   };
 
   const handleSelectPreset = (preset: ShaderPreset) => {
@@ -150,6 +161,7 @@ ${tool.previewMain}
     setPresetName(preset.name);
     setPresetDesc(preset.description || '');
     setCurrentId(preset.id);
+    setSelectedCategoryId(preset.category_id ?? null);
     setIsPresetMode(true);
     setCode(preset.glsl_code);
     setMarkdownDoc(customTool.markdownDoc);
@@ -175,18 +187,19 @@ ${tool.previewMain}
       };
       const res = await apiService.updateTool(updated);
       setSavedStatus('Tool updated in database!');
-      await loadTools();
+      const saved = res.tool || updated;
+      await loadTools(saved.id);
       if (selectedTool.id === updated.id) {
-        setSelectedTool(res.tool || updated);
-        setPresetName((res.tool || updated).name);
-        setPresetDesc((res.tool || updated).description);
+        handleSelectTool(saved);
       }
     } else {
       const res = await apiService.createTool(toolData);
       setSavedStatus('Tool created in database!');
-      await loadTools();
       if (res.tool) {
+        await loadTools(res.tool.id);
         handleSelectTool(res.tool);
+      } else {
+        await loadTools();
       }
     }
     setTimeout(() => setSavedStatus(''), 3000);
@@ -214,12 +227,14 @@ ${tool.previewMain}
         glsl_code: code,
         markdown_doc: markdownDoc
       });
-      if (res.id) {
+      if (res && res.id) {
         setCurrentId(res.id);
+        setSelectedCategoryId(catId);
         setIsPresetMode(true);
       }
       setSavedStatus('Saved to folder!');
       setTimeout(() => setSavedStatus(''), 3000);
+      return res;
     } catch {
       setSavedStatus('Error saving');
     }
@@ -244,15 +259,15 @@ ${tool.previewMain}
           ...selectedTool,
           name: presetName,
           description: presetDesc,
+          glsl: '',
           previewMain: code,
           markdownDoc: markdownDoc
         };
         const res = await apiService.updateTool(updatedTool);
-        if (res.tool) {
-          setSelectedTool(res.tool);
-        }
+        const saved = res.tool || updatedTool;
+        setSelectedTool(saved);
         setSavedStatus('Saved tool to DB!');
-        await loadTools();
+        await loadTools(saved.id);
       }
       setTimeout(() => setSavedStatus(''), 3000);
     } catch {

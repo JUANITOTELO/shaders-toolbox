@@ -70,6 +70,7 @@ class Database {
         );");
 
         // Try adding any new columns if table already exists
+        try { $this->conn->exec("ALTER TABLE presets ADD COLUMN category_id INTEGER DEFAULT NULL;"); } catch(Exception $e) {}
         try { $this->conn->exec("ALTER TABLE presets ADD COLUMN markdown_doc TEXT DEFAULT '';"); } catch(Exception $e) {}
         try { $this->conn->exec("ALTER TABLE presets ADD COLUMN difficulty TEXT DEFAULT 'Beginner';"); } catch(Exception $e) {}
         try { $this->conn->exec("ALTER TABLE presets ADD COLUMN order_index INTEGER DEFAULT 0;"); } catch(Exception $e) {}
