@@ -1,6 +1,119 @@
-import { ShaderPreset, Category } from '../types';
+import { ShaderPreset, Category, ShaderTool } from '../types';
+import { allTools as fallbackTools } from '../tools/registry';
 
 export const apiService = {
+  // --- TOOLS CRUD (Data-Driven Architecture) ---
+  async getTools(): Promise<ShaderTool[]> {
+    try {
+      const res = await fetch('/api/tools.php');
+      if (!res.ok) throw new Error('Failed to fetch tools from database');
+      const data: ShaderTool[] = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        localStorage.setItem('local_tools_cache', JSON.stringify(data));
+        return data;
+      }
+      throw new Error('Empty tools response');
+    } catch (err) {
+      console.warn('API error, falling back to local storage / static tools:', err);
+      const local = localStorage.getItem('local_tools_cache');
+      if (local) {
+        try {
+          return JSON.parse(local);
+        } catch {
+          // fallback to bundled
+        }
+      }
+      return fallbackTools;
+    }
+  },
+
+  async getTool(id: string): Promise<ShaderTool | null> {
+    try {
+      const res = await fetch(`/api/tools.php?id=${encodeURIComponent(id)}`);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      const tools = await this.getTools();
+      return tools.find(t => t.id === id) || null;
+    }
+  },
+
+  async createTool(tool: Partial<ShaderTool>): Promise<{ message: string; tool: ShaderTool }> {
+    try {
+      const res = await fetch('/api/tools.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(tool)
+      });
+      if (!res.ok) throw new Error('Failed to create tool');
+      const result = await res.json();
+      localStorage.removeItem('local_tools_cache');
+      return result;
+    } catch (err) {
+      console.warn('Saving tool locally due to network failure:', err);
+      const newTool: ShaderTool = {
+        id: tool.id || `tool-${Date.now()}`,
+        section: tool.section || 'Custom Tools',
+        name: tool.name || 'Untitled Tool',
+        description: tool.description || '',
+        glsl: tool.glsl || '',
+        defaultParams: tool.defaultParams || {},
+        previewMain: tool.previewMain || 'void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  fragColor = vec4(1.0);\n}',
+        markdownDoc: tool.markdownDoc || `# ${tool.name}\n\nDocumentation`,
+        orderIndex: tool.orderIndex ?? 999,
+        difficulty: tool.difficulty || 'Beginner',
+        challenge: tool.challenge || { prompt: '', hint: '', solution: '' },
+        created_at: new Date().toISOString()
+      };
+      const local = localStorage.getItem('local_tools_cache');
+      const list: ShaderTool[] = local ? JSON.parse(local) : [...fallbackTools];
+      list.push(newTool);
+      localStorage.setItem('local_tools_cache', JSON.stringify(list));
+      return { message: 'Created tool locally', tool: newTool };
+    }
+  },
+
+  async updateTool(tool: ShaderTool): Promise<{ message: string; tool: ShaderTool }> {
+    try {
+      const res = await fetch('/api/tools.php', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(tool)
+      });
+      if (!res.ok) throw new Error('Failed to update tool');
+      const result = await res.json();
+      localStorage.removeItem('local_tools_cache');
+      return result;
+    } catch (err) {
+      console.warn('Updating tool locally due to network failure:', err);
+      const local = localStorage.getItem('local_tools_cache');
+      let list: ShaderTool[] = local ? JSON.parse(local) : [...fallbackTools];
+      list = list.map(t => t.id === tool.id ? tool : t);
+      localStorage.setItem('local_tools_cache', JSON.stringify(list));
+      return { message: 'Updated tool locally', tool };
+    }
+  },
+
+  async deleteTool(id: string): Promise<{ message: string; id: string }> {
+    try {
+      const res = await fetch(`/api/tools.php?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) throw new Error('Failed to delete tool');
+      const result = await res.json();
+      localStorage.removeItem('local_tools_cache');
+      return result;
+    } catch (err) {
+      console.warn('Deleting tool locally due to network failure:', err);
+      const local = localStorage.getItem('local_tools_cache');
+      let list: ShaderTool[] = local ? JSON.parse(local) : [...fallbackTools];
+      list = list.filter(t => t.id !== id);
+      localStorage.setItem('local_tools_cache', JSON.stringify(list));
+      return { message: 'Deleted tool locally', id };
+    }
+  },
+
+  // --- CATEGORIES CRUD ---
   async getCategories(): Promise<Category[]> {
     try {
       const res = await fetch('/api/categories.php');
@@ -67,6 +180,7 @@ export const apiService = {
     }
   },
 
+  // --- PRESETS CRUD ---
   async getPresets(categoryId?: number): Promise<ShaderPreset[]> {
     try {
       const url = categoryId ? `/api/presets.php?category_id=${categoryId}` : '/api/presets.php';
