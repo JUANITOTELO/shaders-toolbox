@@ -1,11 +1,14 @@
 import React from 'react';
 import { ShaderTool, DifficultyTier } from '../../types';
+import { Edit2, Trash2 } from 'lucide-react';
 
 interface ToolCardProps {
   tool: ShaderTool;
   isSelected: boolean;
   onSelect: (tool: ShaderTool) => void;
   isCompleted?: boolean;
+  onEdit?: (tool: ShaderTool) => void;
+  onDelete?: (tool: ShaderTool) => void;
 }
 
 const difficultyColors: Record<DifficultyTier, string> = {
@@ -15,11 +18,18 @@ const difficultyColors: Record<DifficultyTier, string> = {
   Hero: 'bg-amber-950 text-amber-300 border-amber-800/60'
 };
 
-export const ToolCard: React.FC<ToolCardProps> = ({ tool, isSelected, onSelect, isCompleted = false }) => {
+export const ToolCard: React.FC<ToolCardProps> = ({
+  tool,
+  isSelected,
+  onSelect,
+  isCompleted = false,
+  onEdit,
+  onDelete
+}) => {
   return (
     <div
       onClick={() => onSelect(tool)}
-      className={`p-2.5 rounded-xl border transition-all cursor-pointer flex flex-col gap-1.5 ${
+      className={`group p-2.5 rounded-xl border transition-all cursor-pointer flex flex-col gap-1.5 ${
         isSelected
           ? 'bg-indigo-950/40 border-indigo-500 shadow-md shadow-indigo-950/50'
           : 'bg-neutral-900/60 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900'
@@ -31,6 +41,30 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, isSelected, onSelect, 
           <h3 className="font-semibold text-xs text-neutral-100 truncate">{tool.name}</h3>
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          {onEdit && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(tool);
+              }}
+              className="opacity-0 group-hover:opacity-100 p-1 text-neutral-400 hover:text-indigo-300 rounded hover:bg-neutral-800 transition-opacity cursor-pointer"
+              title="Edit tool metadata"
+            >
+              <Edit2 className="w-3 h-3" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(tool);
+              }}
+              className="opacity-0 group-hover:opacity-100 p-1 text-neutral-400 hover:text-red-400 rounded hover:bg-neutral-800 transition-opacity cursor-pointer"
+              title="Delete tool"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          )}
           <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${difficultyColors[tool.difficulty]}`}>
             {tool.difficulty}
           </span>

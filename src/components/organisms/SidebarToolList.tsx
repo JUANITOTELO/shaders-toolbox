@@ -3,7 +3,7 @@ import { ShaderTool, Category, DifficultyTier, ShaderPreset } from '../../types'
 import { ToolCard } from '../molecules/ToolCard';
 import { FolderTree } from './FolderTree';
 import { Input } from '../atoms/Input';
-import { Search, Layers, ChevronRight, ChevronDown, Folder, PanelLeftClose, PanelLeft, GraduationCap, CheckCircle2 } from 'lucide-react';
+import { Search, Layers, ChevronRight, ChevronDown, Folder, PanelLeftClose, PanelLeft, GraduationCap, CheckCircle2, Plus } from 'lucide-react';
 
 interface SidebarToolListProps {
   tools: ShaderTool[];
@@ -19,6 +19,9 @@ interface SidebarToolListProps {
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   completedIds: string[];
+  onCreateTool?: () => void;
+  onEditTool?: (tool: ShaderTool) => void;
+  onDeleteTool?: (tool: ShaderTool) => void;
 }
 
 export const SidebarToolList: React.FC<SidebarToolListProps> = ({
@@ -34,7 +37,10 @@ export const SidebarToolList: React.FC<SidebarToolListProps> = ({
   onSaveCurrentToCategory,
   isCollapsed,
   onToggleCollapse,
-  completedIds
+  completedIds,
+  onCreateTool,
+  onEditTool,
+  onDeleteTool
 }) => {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'curriculum' | 'folders'>('curriculum');
@@ -132,7 +138,19 @@ export const SidebarToolList: React.FC<SidebarToolListProps> = ({
                 <CheckCircle2 className="w-3 h-3" />
                 {completedIds.length} / {tools.length} Completed
               </span>
-              <span>{progressPercent}%</span>
+              <div className="flex items-center gap-2">
+                <span>{progressPercent}%</span>
+                {onCreateTool && (
+                  <button
+                    onClick={onCreateTool}
+                    className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-medium cursor-pointer transition-colors shadow-xs"
+                    title="Create new shader tool in database"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>New Tool</span>
+                  </button>
+                )}
+              </div>
             </div>
             <div className="w-full h-1.5 bg-neutral-950 rounded-full overflow-hidden border border-neutral-800">
               <div
@@ -218,6 +236,8 @@ export const SidebarToolList: React.FC<SidebarToolListProps> = ({
                         isSelected={selectedTool.id === tool.id}
                         onSelect={onSelectTool}
                         isCompleted={completedIds.includes(tool.id)}
+                        onEdit={onEditTool}
+                        onDelete={onDeleteTool}
                       />
                     ))}
                   </div>
