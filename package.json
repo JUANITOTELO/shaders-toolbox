@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "sync:admin": "tsx scripts/sync-admin-tools.ts",
+    "build:admin": "tsx scripts/sync-admin-tools.ts"
   },
   "dependencies": {
     "@codemirror/lang-cpp": "^6.0.3",

@@ -15,7 +15,22 @@ class Database {
             $this->initializeTables();
         } catch(PDOException $mysql_exception) {
             try {
-                $sqlitePath = __DIR__ . '/../database.sqlite';
+                $possiblePaths = [
+                    getenv('SQLITE_PATH'),
+                    __DIR__ . '/../data/database.sqlite',
+                    __DIR__ . '/../database.sqlite',
+                    __DIR__ . '/../../database.sqlite'
+                ];
+                $sqlitePath = null;
+                foreach ($possiblePaths as $p) {
+                    if (!empty($p) && file_exists($p)) {
+                        $sqlitePath = $p;
+                        break;
+                    }
+                }
+                if (!$sqlitePath) {
+                    $sqlitePath = __DIR__ . '/../database.sqlite';
+                }
                 $this->conn = new PDO("sqlite:" . $sqlitePath);
                 $this->conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
                 $this->initializeTables();
@@ -82,8 +97,20 @@ class Database {
         $toolCount = (int)$stmtTools->fetchColumn();
 
         if ($toolCount === 0) {
-            $seedFile = __DIR__ . '/../data/seed_tools.json';
-            if (file_exists($seedFile)) {
+            $possibleSeedPaths = [
+                __DIR__ . '/../data/seed_tools.json',
+                __DIR__ . '/seed_tools.json',
+                __DIR__ . '/../../backend/data/seed_tools.json',
+                __DIR__ . '/../../data/seed_tools.json'
+            ];
+            $seedFile = null;
+            foreach ($possibleSeedPaths as $sp) {
+                if (file_exists($sp)) {
+                    $seedFile = $sp;
+                    break;
+                }
+            }
+            if ($seedFile && file_exists($seedFile)) {
                 $toolsData = json_decode(file_get_contents($seedFile), true);
                 if (is_array($toolsData)) {
                     $insertStmt = $this->conn->prepare("

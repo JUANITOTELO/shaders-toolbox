@@ -1,11 +1,14 @@
 import { ShaderPreset, Category, ShaderTool } from '../types';
 import { allTools as fallbackTools } from '../tools/registry';
 
+const BASE_URL = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
+const getApiUrl = (endpoint: string) => `${BASE_URL}/api/${endpoint.replace(/^\/+/, '')}`;
+
 export const apiService = {
   // --- TOOLS CRUD (Data-Driven Architecture) ---
   async getTools(): Promise<ShaderTool[]> {
     try {
-      const res = await fetch('/api/tools.php');
+      const res = await fetch(getApiUrl('tools.php'));
       if (!res.ok) throw new Error('Failed to fetch tools from database');
       const data: ShaderTool[] = await res.json();
       if (Array.isArray(data) && data.length > 0) {
@@ -29,7 +32,7 @@ export const apiService = {
 
   async getTool(id: string): Promise<ShaderTool | null> {
     try {
-      const res = await fetch(`/api/tools.php?id=${encodeURIComponent(id)}`);
+      const res = await fetch(getApiUrl(`tools.php?id=${encodeURIComponent(id)}`));
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -40,7 +43,7 @@ export const apiService = {
 
   async createTool(tool: Partial<ShaderTool>): Promise<{ message: string; tool: ShaderTool }> {
     try {
-      const res = await fetch('/api/tools.php', {
+      const res = await fetch(getApiUrl('tools.php'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(tool)
@@ -75,7 +78,7 @@ export const apiService = {
 
   async updateTool(tool: ShaderTool): Promise<{ message: string; tool: ShaderTool }> {
     try {
-      const res = await fetch('/api/tools.php', {
+      const res = await fetch(getApiUrl('tools.php'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(tool)
@@ -96,7 +99,7 @@ export const apiService = {
 
   async deleteTool(id: string): Promise<{ message: string; id: string }> {
     try {
-      const res = await fetch(`/api/tools.php?id=${encodeURIComponent(id)}`, {
+      const res = await fetch(getApiUrl(`tools.php?id=${encodeURIComponent(id)}`), {
         method: 'DELETE'
       });
       if (!res.ok) throw new Error('Failed to delete tool');
@@ -116,7 +119,7 @@ export const apiService = {
   // --- CATEGORIES CRUD ---
   async getCategories(): Promise<Category[]> {
     try {
-      const res = await fetch('/api/categories.php');
+      const res = await fetch(getApiUrl('categories.php'));
       if (!res.ok) throw new Error('Failed to fetch categories');
       const data: Category[] = await res.json();
       // Deduplicate by slug
@@ -143,7 +146,7 @@ export const apiService = {
 
   async createCategory(name: string, parentId: number | null = null): Promise<any> {
     try {
-      const res = await fetch('/api/categories.php', {
+      const res = await fetch(getApiUrl('categories.php'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, parent_id: parentId })
@@ -166,7 +169,7 @@ export const apiService = {
 
   async deleteCategory(id: number): Promise<any> {
     try {
-      const res = await fetch(`/api/categories.php?id=${id}`, {
+      const res = await fetch(getApiUrl(`categories.php?id=${id}`), {
         method: 'DELETE'
       });
       if (!res.ok) throw new Error('Failed to delete category');
@@ -183,7 +186,7 @@ export const apiService = {
   // --- PRESETS CRUD ---
   async getPresets(categoryId?: number): Promise<ShaderPreset[]> {
     try {
-      const url = categoryId !== undefined ? `/api/presets.php?category_id=${categoryId}` : '/api/presets.php';
+      const url = categoryId !== undefined ? getApiUrl(`presets.php?category_id=${categoryId}`) : getApiUrl('presets.php');
       const res = await fetch(url);
       if (!res.ok) throw new Error('Failed to fetch presets');
       const data: ShaderPreset[] = await res.json();
@@ -201,7 +204,7 @@ export const apiService = {
 
   async createPreset(preset: ShaderPreset): Promise<any> {
     try {
-      const res = await fetch('/api/presets.php', {
+      const res = await fetch(getApiUrl('presets.php'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(preset)
@@ -222,7 +225,7 @@ export const apiService = {
 
   async updatePreset(preset: ShaderPreset): Promise<any> {
     try {
-      const res = await fetch('/api/presets.php', {
+      const res = await fetch(getApiUrl('presets.php'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(preset)
@@ -242,7 +245,7 @@ export const apiService = {
 
   async deletePreset(id: number): Promise<any> {
     try {
-      const res = await fetch(`/api/presets.php?id=${id}`, {
+      const res = await fetch(getApiUrl(`presets.php?id=${id}`), {
         method: 'DELETE'
       });
       if (!res.ok) throw new Error('Failed to delete preset');
