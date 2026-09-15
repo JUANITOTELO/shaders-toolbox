@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button } from '../atoms/Button';
-import { Wand2, Download, FolderOpen, Save, Sparkles, Code2, BookOpen, Columns, ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { Wand2, Download, FolderOpen, Save, Sparkles, Code2, BookOpen, Columns, ChevronLeft, ChevronRight, CheckCircle2, Settings } from 'lucide-react';
 
 interface HeaderNavProps {
   presetName: string;
@@ -21,6 +21,7 @@ interface HeaderNavProps {
   onOpenPresets: () => void;
   onSave: () => void;
   savedStatus: string;
+  onEditToolMetadata?: () => void;
 }
 
 export const HeaderNav: React.FC<HeaderNavProps> = ({
@@ -41,7 +42,8 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
   onSnapshot,
   onOpenPresets,
   onSave,
-  savedStatus
+  savedStatus,
+  onEditToolMetadata
 }) => {
   return (
     <header className="h-14 bg-neutral-900 border-b border-neutral-800 px-4 flex items-center justify-between select-none">
@@ -141,6 +143,12 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
           <FolderOpen className="w-3.5 h-3.5" />
           Presets
         </Button>
+        {onEditToolMetadata && (
+          <Button variant="outline" onClick={onEditToolMetadata} className="h-8 px-2.5 text-xs" title="Edit Tool Metadata">
+            <Settings className="w-3.5 h-3.5" />
+            Tool Info
+          </Button>
+        )}
         <Button onClick={onSave} className="h-8 px-3 text-xs bg-indigo-600 hover:bg-indigo-500">
           <Save className="w-3.5 h-3.5" />
           Save

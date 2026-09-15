@@ -7,12 +7,17 @@ import { MathDocViewer } from '../components/organisms/MathDocViewer';
 import { HeaderNav } from '../components/organisms/HeaderNav';
 import { StatusBar } from '../components/organisms/StatusBar';
 import { PresetManagerModal } from '../components/organisms/PresetManagerModal';
+import { ToolModal } from '../components/organisms/ToolModal';
 import { ResizableSplitter } from '../components/atoms/ResizableSplitter';
 import { apiService } from '../services/apiService';
 
 export const ToolboxPage: React.FC = () => {
+  const [tools, setTools] = useState<ShaderTool[]>(allTools);
   const [selectedTool, setSelectedTool] = useState<ShaderTool>(allTools[0]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isToolModalOpen, setIsToolModalOpen] = useState(false);
+  const [editingTool, setEditingTool] = useState<ShaderTool | null>(null);
+
   const [sidebarWidth, setSidebarWidth] = useState<number>(300);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -22,6 +27,7 @@ export const ToolboxPage: React.FC = () => {
   const [presetName, setPresetName] = useState(selectedTool.name);
   const [presetDesc, setPresetDesc] = useState(selectedTool.description);
   const [currentId, setCurrentId] = useState<number | undefined>(undefined);
+  const [isPresetMode, setIsPresetMode] = useState<boolean>(false);
   const [savedStatus, setSavedStatus] = useState('');
   const [compileError, setCompileError] = useState<{ message: string; line?: number } | null>(null);
 
@@ -36,9 +42,9 @@ export const ToolboxPage: React.FC = () => {
   });
 
   const currentIndex = useMemo(() => {
-    const idx = allTools.findIndex(t => t.id === selectedTool.id);
+    const idx = tools.findIndex(t => t.id === selectedTool.id);
     return idx >= 0 ? idx : 0;
-  }, [selectedTool]);
+  }, [tools, selectedTool]);
 
   const [splitWidths, setSplitWidths] = useState<{ code: number; viewport: number; docs: number }>({
     code: 35,
@@ -56,8 +62,20 @@ ${selectedTool.previewMain}
   const [markdownDoc, setMarkdownDoc] = useState<string>(selectedTool.markdownDoc);
 
   useEffect(() => {
+    loadTools();
     loadCategories();
   }, []);
+
+  const loadTools = async () => {
+    const loaded = await apiService.getTools();
+    if (loaded && loaded.length > 0) {
+      setTools(loaded);
+      setSelectedTool(prev => {
+        const match = loaded.find(t => t.id === prev.id);
+        return match || loaded[0];
+      });
+    }
+  };
 
   const loadCategories = async () => {
     const cats = await apiService.getCategories();
@@ -76,13 +94,13 @@ ${selectedTool.previewMain}
 
   const handlePrevLesson = () => {
     if (currentIndex > 0) {
-      handleSelectTool(allTools[currentIndex - 1]);
+      handleSelectTool(tools[currentIndex - 1]);
     }
   };
 
   const handleNextLesson = () => {
-    if (currentIndex < allTools.length - 1) {
-      handleSelectTool(allTools[currentIndex + 1]);
+    if (currentIndex < tools.length - 1) {
+      handleSelectTool(tools[currentIndex + 1]);
     }
   };
 
@@ -104,6 +122,7 @@ ${selectedTool.previewMain}
     setPresetName(tool.name);
     setPresetDesc(tool.description);
     setCurrentId(undefined);
+    setIsPresetMode(false);
     setCode(`
 // ShaderStudio IDE: ${tool.name}
 ${tool.glsl}
@@ -131,8 +150,59 @@ ${tool.previewMain}
     setPresetName(preset.name);
     setPresetDesc(preset.description || '');
     setCurrentId(preset.id);
+    setIsPresetMode(true);
     setCode(preset.glsl_code);
     setMarkdownDoc(customTool.markdownDoc);
+  };
+
+  // Tool CRUD Operations
+  const handleOpenCreateTool = () => {
+    setEditingTool(null);
+    setIsToolModalOpen(true);
+  };
+
+  const handleOpenEditTool = (tool?: ShaderTool) => {
+    setEditingTool(tool || selectedTool);
+    setIsToolModalOpen(true);
+  };
+
+  const handleSaveToolModal = async (toolData: Partial<ShaderTool>) => {
+    if (editingTool) {
+      const updated: ShaderTool = {
+        ...editingTool,
+        ...toolData,
+        id: editingTool.id
+      };
+      const res = await apiService.updateTool(updated);
+      setSavedStatus('Tool updated in database!');
+      await loadTools();
+      if (selectedTool.id === updated.id) {
+        setSelectedTool(res.tool || updated);
+        setPresetName((res.tool || updated).name);
+        setPresetDesc((res.tool || updated).description);
+      }
+    } else {
+      const res = await apiService.createTool(toolData);
+      setSavedStatus('Tool created in database!');
+      await loadTools();
+      if (res.tool) {
+        handleSelectTool(res.tool);
+      }
+    }
+    setTimeout(() => setSavedStatus(''), 3000);
+  };
+
+  const handleDeleteTool = async (tool: ShaderTool) => {
+    if (confirm(`Are you sure you want to delete tool "${tool.name}" from the database?`)) {
+      await apiService.deleteTool(tool.id);
+      setSavedStatus('Tool deleted!');
+      const updated = tools.filter(t => t.id !== tool.id);
+      setTools(updated);
+      if (selectedTool.id === tool.id && updated.length > 0) {
+        handleSelectTool(updated[0]);
+      }
+      setTimeout(() => setSavedStatus(''), 3000);
+    }
   };
 
   const handleSaveToFolder = async (catId: number | null) => {
@@ -144,7 +214,10 @@ ${tool.previewMain}
         glsl_code: code,
         markdown_doc: markdownDoc
       });
-      if (res.id) setCurrentId(res.id);
+      if (res.id) {
+        setCurrentId(res.id);
+        setIsPresetMode(true);
+      }
       setSavedStatus('Saved to folder!');
       setTimeout(() => setSavedStatus(''), 3000);
     } catch {
@@ -154,7 +227,8 @@ ${tool.previewMain}
 
   const handleSave = async () => {
     try {
-      if (currentId) {
+      if (isPresetMode && currentId) {
+        // Update preset in folder
         await apiService.updatePreset({
           id: currentId,
           category_id: selectedCategoryId,
@@ -163,17 +237,22 @@ ${tool.previewMain}
           glsl_code: code,
           markdown_doc: markdownDoc
         });
-        setSavedStatus('Updated successfully');
+        setSavedStatus('Updated preset successfully');
       } else {
-        const res = await apiService.createPreset({
-          category_id: selectedCategoryId,
+        // Update tool directly in the database
+        const updatedTool: ShaderTool = {
+          ...selectedTool,
           name: presetName,
           description: presetDesc,
-          glsl_code: code,
-          markdown_doc: markdownDoc
-        });
-        if (res.id) setCurrentId(res.id);
-        setSavedStatus('Saved successfully');
+          previewMain: code,
+          markdownDoc: markdownDoc
+        };
+        const res = await apiService.updateTool(updatedTool);
+        if (res.tool) {
+          setSelectedTool(res.tool);
+        }
+        setSavedStatus('Saved tool to DB!');
+        await loadTools();
       }
       setTimeout(() => setSavedStatus(''), 3000);
     } catch {
@@ -233,6 +312,10 @@ ${tool.previewMain}
     });
   };
 
+  const existingSections = useMemo(() => {
+    return Array.from(new Set(tools.map(t => t.section)));
+  }, [tools]);
+
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-neutral-950 font-sans select-none">
       <HeaderNav
@@ -240,13 +323,13 @@ ${tool.previewMain}
         onPresetNameChange={setPresetName}
         section={selectedTool.section}
         lessonNumber={currentIndex + 1}
-        totalLessons={allTools.length}
+        totalLessons={tools.length}
         isCompleted={completedIds.includes(selectedTool.id)}
         onToggleComplete={handleToggleComplete}
         onPrevLesson={handlePrevLesson}
         onNextLesson={handleNextLesson}
         hasPrev={currentIndex > 0}
-        hasNext={currentIndex < allTools.length - 1}
+        hasNext={currentIndex < tools.length - 1}
         activeView={activeView}
         onViewChange={setActiveView}
         onFormat={handleFormat}
@@ -254,13 +337,14 @@ ${tool.previewMain}
         onOpenPresets={() => setIsModalOpen(true)}
         onSave={handleSave}
         savedStatus={savedStatus}
+        onEditToolMetadata={!isPresetMode ? () => handleOpenEditTool(selectedTool) : undefined}
       />
 
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar Container */}
         <div style={{ width: isSidebarCollapsed ? '48px' : `${sidebarWidth}px` }} className="h-full flex-shrink-0">
           <SidebarToolList
-            tools={allTools}
+            tools={tools}
             selectedTool={selectedTool}
             onSelectTool={handleSelectTool}
             categories={categories}
@@ -273,6 +357,9 @@ ${tool.previewMain}
             isCollapsed={isSidebarCollapsed}
             onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
             completedIds={completedIds}
+            onCreateTool={handleOpenCreateTool}
+            onEditTool={handleOpenEditTool}
+            onDeleteTool={handleDeleteTool}
           />
         </div>
 
@@ -346,6 +433,14 @@ ${tool.previewMain}
         onSelectPreset={handleSelectPreset}
         categories={categories}
         selectedCategoryId={selectedCategoryId}
+      />
+
+      <ToolModal
+        isOpen={isToolModalOpen}
+        onClose={() => setIsToolModalOpen(false)}
+        onSave={handleSaveToolModal}
+        initialTool={editingTool}
+        existingSections={existingSections}
       />
     </div>
   );
