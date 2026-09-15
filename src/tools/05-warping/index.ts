@@ -6,7 +6,7 @@ export const warpingTools: ShaderTool[] = [
     section: '5. Domain Warping & Fractal Synthesis',
     name: 'Fractal Brownian Motion (fBM)',
     description: 'Superimposing octaves of noise with rotation, lacunarity, and persistence gain.',
-    orderIndex: 28,
+    orderIndex: 21,
     difficulty: 'Hero',
     glsl: `float hash21(in vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -37,7 +37,7 @@ float fbm(in vec2 p, in int octaves, in float lacunarity, in float gain) {
     amp *= gain;
   }
   return sum;
-}`,
+} `,
     defaultParams: {},
     previewMain: `void mainImage(out vec4 fragColor, in vec2 fragCoord) {
   vec2 uv = fragCoord.xy / u_resolution.xy * 3.0;
@@ -47,11 +47,11 @@ float fbm(in vec2 p, in int octaves, in float lacunarity, in float gain) {
     challenge: {
       prompt: 'Tune fbm octaves from 2 to 7 based on mouse X position to understand the performance cost vs detail tradeoff of spectral summation.',
       hint: 'int octaves = int(2.0 + 5.0 * (u_mouse.x / u_resolution.x));',
-      solution: `float fbmTest(in vec2 p, in int octaves, in float lacunarity, in float gain);
-void mainImage(out vec4 fragColor, in vec2 fragCoord) {
-  vec2 uv = fragCoord.xy / u_resolution.xy * 4.0;
-  float f = fbmTest(uv + u_time * 0.1, 6, 2.0, 0.5);
-  fragColor = vec4(vec3(f * 0.6), 1.0);
+      solution: `void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+  vec2 uv = fragCoord.xy / u_resolution.xy * 3.0;
+  int octaves = int(2.0 + 5.0 * clamp(u_mouse.x / u_resolution.x, 0.0, 1.0));
+  float f = fbm(uv + u_time * 0.1, octaves, 2.0, 0.5);
+  fragColor = vec4(vec3(f * 0.5), 1.0);
 }`
     },
     markdownDoc: `# Fractal Brownian Motion (fBM)
@@ -63,7 +63,7 @@ $$f_{\\text{fBM}}(\\mathbf{x}) = \\sum_{k=0}^{N-1} A^k n\\left( \\Lambda^k \\mat
     section: '5. Domain Warping & Fractal Synthesis',
     name: 'Multi-Scale Domain Warping',
     description: 'Feeds noise fields back into their own coordinate space to simulate organic fluid motion.',
-    orderIndex: 29,
+    orderIndex: 22,
     difficulty: 'Hero',
     glsl: `float hash21(in vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -113,12 +113,11 @@ float domainWarp(in vec2 p, out vec2 q, out vec2 r, in float time) {
     challenge: {
       prompt: 'Inject cosine color palette coloring driven by the secondary feedback vector r to create realistic atmospheric Jupiter storm clouds.',
       hint: 'vec3 col = cosinePalette(length(r), vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0, 0.33, 0.67));',
-      solution: `float domainWarpTest(in vec2 p, out vec2 q, out vec2 r, in float time);
-void mainImage(out vec4 fragColor, in vec2 fragCoord) {
-  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y * 2.0;
+      solution: `void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y * 1.5;
   vec2 q, r;
-  float f = domainWarpTest(uv, q, r, u_time);
-  vec3 col = 0.5 + 0.5 * cos(6.28318 * (vec3(1.0) * f + vec3(0.2, 0.5, 0.8)));
+  float f = domainWarp(uv, q, r, u_time);
+  vec3 col = 0.5 + 0.5 * cos(6.28318 * (vec3(1.0) * length(r) + vec3(0.0, 0.33, 0.67)));
   fragColor = vec4(col, 1.0);
 }`
     },

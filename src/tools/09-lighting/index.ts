@@ -6,7 +6,7 @@ export const lightingTools: ShaderTool[] = [
     section: '9. Analytical Lighting, Normals & Shading',
     name: 'Blinn-Phong & Schlick-Fresnel Illuminator',
     description: 'Physically plausible specular Blinn-Phong lighting combined with Schlick Fresnel reflectance.',
-    orderIndex: 30,
+    orderIndex: 33,
     difficulty: 'Hero',
     glsl: `struct SurfaceMaterial {
   vec3 baseColor;
@@ -52,16 +52,19 @@ vec3 evaluateBlinnPhong(
     challenge: {
       prompt: 'Change the dielectric material into gold metal by raising F0 to vec3(1.0, 0.78, 0.34) and tuning specular power to 128.',
       hint: 'Update mat.f0 to 0.9 and baseColor to gold.',
-      solution: `struct SurfaceMaterial { vec3 baseColor; float roughness; float specularPower; float f0; };
-vec3 evaluateBlinnPhong(in vec3 normal, in vec3 viewDir, in vec3 lightDir, in vec3 lightColor, in SurfaceMaterial mat);
-void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+      solution: `void mainImage(out vec4 fragColor, in vec2 fragCoord) {
   vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;
   float r = length(uv);
-  if (r > 0.7) { fragColor = vec4(0.02, 0.02, 0.04, 1.0); return; }
-  vec3 N = normalize(vec3(uv, sqrt(0.49 - r * r)));
+  if (r > 0.7) {
+    fragColor = vec4(0.05, 0.05, 0.08, 1.0);
+    return;
+  }
+  vec3 N = normalize(vec3(uv, sqrt(0.7 * 0.7 - r * r)));
+  vec3 V = vec3(0.0, 0.0, 1.0);
+  vec3 L = normalize(vec3(sin(u_time), cos(u_time), 1.0));
   SurfaceMaterial gold = SurfaceMaterial(vec3(1.0, 0.76, 0.33), 0.1, 128.0, 0.9);
-  vec3 col = evaluateBlinnPhong(N, vec3(0,0,1), normalize(vec3(1,1,1)), vec3(1.0), gold);
-  fragColor = vec4(col, 1.0);
+  vec3 color = evaluateBlinnPhong(N, V, L, vec3(1.0), gold);
+  fragColor = vec4(color, 1.0);
 }`
     },
     markdownDoc: `# Blinn-Phong & Schlick-Fresnel Illumination Model
@@ -74,7 +77,7 @@ $$F(\\mathbf{V}, \\mathbf{H}) = F_0 + (1 - F_0)(1 - \\mathbf{V} \\cdot \\mathbf{
     section: '9. Analytical Lighting, Normals & Shading',
     name: 'Screen-Space Rim & Subsurface Scattering',
     description: 'Silhouette rim lighting glow and thin subsurface scattering wrap lighting.',
-    orderIndex: 31,
+    orderIndex: 34,
     difficulty: 'Hero',
     glsl: `float calculateRim(in vec3 normal, in vec3 viewDir, in float rimPower) {
   float f = 1.0 - max(dot(normalize(normal), normalize(viewDir)), 0.0);
@@ -103,9 +106,7 @@ float wrapLighting(in vec3 normal, in vec3 lightDir, in float wrap) {
     challenge: {
       prompt: 'Combine strong rim power (4.0) with warm jade green subsurface scattering to achieve a translucent mineral shader.',
       hint: 'vec3 jade = vec3(0.1, 0.8, 0.5) * wrap + vec3(0.8, 1.0, 0.9) * rim;',
-      solution: `float calculateRim(in vec3 normal, in vec3 viewDir, in float rimPower);
-float wrapLighting(in vec3 normal, in vec3 lightDir, in float wrap);
-void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+      solution: `void mainImage(out vec4 fragColor, in vec2 fragCoord) {
   vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;
   float r = length(uv);
   if (r > 0.7) { fragColor = vec4(0.02, 0.02, 0.04, 1.0); return; }
@@ -125,7 +126,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     section: '9. Analytical Lighting, Normals & Shading',
     name: 'Finite Difference Normal Reconstruction',
     description: 'Reconstructs smooth surface normal vectors from any 2D procedural scalar heightfield.',
-    orderIndex: 32,
+    orderIndex: 35,
     difficulty: 'Hero',
     glsl: `float hash21(in vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -161,8 +162,7 @@ vec3 reconstructNormal(in vec2 p, in float eps, in float strength) {
     challenge: {
       prompt: 'Add specular reflection to the reconstructed terrain normal using pow(max(dot(reflect(-lightDir, normal), vec3(0,0,1)), 0.0), 32.0).',
       hint: 'vec3 R = reflect(-lightDir, normal); float spec = pow(max(R.z, 0.0), 32.0);',
-      solution: `vec3 reconstructNormal(in vec2 p, in float eps, in float strength);
-void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+      solution: `void mainImage(out vec4 fragColor, in vec2 fragCoord) {
   vec2 uv = fragCoord.xy / u_resolution.xy;
   vec3 N = reconstructNormal(uv + u_time * 0.05, 0.005, 2.0);
   vec3 L = normalize(vec3(sin(u_time), cos(u_time), 1.0));

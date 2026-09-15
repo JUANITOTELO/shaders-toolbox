@@ -6,7 +6,7 @@ export const noiseTools: ShaderTool[] = [
     section: '4. Procedural Coherent Noise & Field Generators',
     name: 'Dimensionless PRNG Hashes',
     description: 'Textureless, deterministic 1D, 2D, and gradient vector hashes without sinusoidal artifacts.',
-    orderIndex: 19,
+    orderIndex: 16,
     difficulty: 'Advanced',
     glsl: `float hash11(in float p) {
   p = fract(p * 0.1031);
@@ -51,7 +51,7 @@ $$h(p) = \\text{frac}\\left( p \\cdot (p + C_1) \\right)$$`
     section: '4. Procedural Coherent Noise & Field Generators',
     name: 'Bilinear Value Noise',
     description: 'Lattice value noise interpolated via Ken Perlin quintic polynomial.',
-    orderIndex: 20,
+    orderIndex: 17,
     difficulty: 'Advanced',
     glsl: `float hash21(in vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -90,7 +90,7 @@ float valueNoise(in vec2 p) {
     section: '4. Procedural Coherent Noise & Field Generators',
     name: 'Classic 2D Gradient Noise (Perlin)',
     description: 'Gradient dot-product noise computed on lattice points for isotropic texture generation.',
-    orderIndex: 21,
+    orderIndex: 18,
     difficulty: 'Advanced',
     glsl: `float hash21(in vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -138,7 +138,7 @@ float perlinNoise(in vec2 p) {
     section: '4. Procedural Coherent Noise & Field Generators',
     name: '2D Simplex Noise',
     description: 'Evaluated on a skewed triangular grid to eliminate directional axis bias and artifacts.',
-    orderIndex: 22,
+    orderIndex: 19,
     difficulty: 'Advanced',
     glsl: `vec3 permute(in vec3 x) {
   return mod(((x * 34.0) + 1.0) * x, 289.0);
@@ -194,7 +194,7 @@ float simplexNoise(in vec2 v) {
     section: '4. Procedural Coherent Noise & Field Generators',
     name: 'Cellular / Worley Noise (F1 & F2)',
     description: 'Computes Euclidean distance to the closest (F1) and second-closest (F2) Poisson feature points.',
-    orderIndex: 23,
+    orderIndex: 20,
     difficulty: 'Advanced',
     glsl: `vec2 hash22(in vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));

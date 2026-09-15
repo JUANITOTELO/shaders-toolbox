@@ -16,11 +16,11 @@ const unsortedTools: ShaderTool[] = [
   ...coordinateTools,
   ...transformationTools,
   ...shapingTools,
+  ...noiseTools,
+  ...warpingTools,
   ...sdfTools,
   ...tilingTools,
-  ...noiseTools,
   ...colorTools,
-  ...warpingTools,
   ...lightingTools,
   ...raymarchingTools,
 ];

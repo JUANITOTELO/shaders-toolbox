@@ -6,7 +6,7 @@ export const raymarchingTools: ShaderTool[] = [
     section: '10. 3D Raymarching & Physical Shading (Hero)',
     name: '3D Pinhole Camera & LookAt Matrix',
     description: 'Constructing virtual camera rays in world space with ray origin (ro), ray direction (rd), and an orthonormal LookAt view basis.',
-    orderIndex: 33,
+    orderIndex: 36,
     difficulty: 'Hero',
     glsl: `mat3 setCamera(in vec3 ro, in vec3 ta, in float cr) {
   vec3 cw = normalize(ta - ro); // Forward view vector
@@ -69,7 +69,7 @@ $$\\mathbf{rd} = \\frac{\\mathbf{M}_{\\text{cam}} \\begin{pmatrix} u \\\\ v \\\\
     section: '10. 3D Raymarching & Physical Shading (Hero)',
     name: 'Sphere Tracing (Raymarching 3D SDF)',
     description: 'Iterative raymarching using sphere tracing: stepping along ray direction by exact SDF distances until intersection or horizon.',
-    orderIndex: 34,
+    orderIndex: 37,
     difficulty: 'Hero',
     glsl: `float mapScene(in vec3 p) {
   // Sphere at origin with radius 1.0 combined with ground plane
@@ -152,7 +152,7 @@ Guarantees convergence to within $\\epsilon$ ($10^{-3}$) without overstepping or
     section: '10. 3D Raymarching & Physical Shading (Hero)',
     name: '3D SDF Surface Normal Gradient',
     description: 'Evaluating surface normal vectors in 3D using the tetrahedral finite difference gradient of the distance field.',
-    orderIndex: 35,
+    orderIndex: 38,
     difficulty: 'Hero',
     glsl: `float mapScene(in vec3 p) {
   return length(p) - 1.0;
@@ -236,7 +236,7 @@ Using a regular tetrahedron vertices $(\\pm 1, \\pm 1, \\pm 1)$, only 4 scene ev
     section: '10. 3D Raymarching & Physical Shading (Hero)',
     name: 'Analytical Soft Shadows & Penumbra',
     description: 'Simulating spherical area light soft shadows and realistic penumbras by tracking ray-surface clearance along the shadow ray.',
-    orderIndex: 36,
+    orderIndex: 39,
     difficulty: 'Hero',
     glsl: `float mapScene(in vec3 p) {
   float sphere = length(p - vec3(0.0, 0.5, 0.0)) - 0.7;
@@ -342,7 +342,7 @@ $$S(\\mathbf{p}, \\mathbf{L}) = \\min_{t \\in [t_{\\min}, t_{\\max}]} \\left( \\
     section: '10. 3D Raymarching & Physical Shading (Hero)',
     name: 'SDF Ambient Occlusion (AO)',
     description: 'Approximating diffuse ambient light occlusion in creases and crevices by sampling SDF distances along the surface normal.',
-    orderIndex: 37,
+    orderIndex: 40,
     difficulty: 'Hero',
     glsl: `float mapScene(in vec3 p) {
   float sphere = length(p - vec3(0.0, 0.6, 0.0)) - 0.6;
@@ -435,7 +435,7 @@ $$\\text{AO}(\\mathbf{p}, \\mathbf{N}) = 1.0 - k \\sum_{i=1}^M w_i \\left( h_i -
     section: '10. 3D Raymarching & Physical Shading (Hero)',
     name: 'ACES Film Tonemapping & Gamma 2.2',
     description: 'The Hero Finale: Converting unbounded HDR physical radiance into photographic film sRGB using the ACES curve and 2.2 gamma correction.',
-    orderIndex: 38,
+    orderIndex: 41,
     difficulty: 'Hero',
     glsl: `// Narkowicz 2015 fitted ACES Film curve (Academy Color Encoding System)
 vec3 acesFilm(in vec3 x) {

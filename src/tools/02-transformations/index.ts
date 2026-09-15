@@ -6,7 +6,7 @@ export const transformationTools: ShaderTool[] = [
     section: '2. Geometric Transformations & Linear Algebra',
     name: '2D Rotation Matrix',
     description: 'Orthogonal 2D rotation matrix preserving Euclidean distance.',
-    orderIndex: 4,
+    orderIndex: 7,
     difficulty: 'Intermediate',
     glsl: `mat2 rotate2D(in float angle) {
   float c = cos(angle);
@@ -41,7 +41,7 @@ $$\\mathbf{R}(\\theta) = \\begin{bmatrix} \\cos\\theta & -\\sin\\theta \\\\ \\si
     section: '2. Geometric Transformations & Linear Algebra',
     name: '2D Shear / Skew',
     description: 'Deforms coordinates by skewing axes by tangent angle amounts.',
-    orderIndex: 5,
+    orderIndex: 8,
     difficulty: 'Intermediate',
     glsl: `vec2 skew2D(in vec2 p, in vec2 skewAmount) {
   return vec2(
@@ -76,7 +76,7 @@ $$\\mathbf{S} = \\begin{bmatrix} 1 & \\tan\\phi_x \\\\ \\tan\\phi_y & 1 \\end{bm
     section: '2. Geometric Transformations & Linear Algebra',
     name: 'Polar & Log-Spherical Map',
     description: 'Cartesian to polar conversion and complex logarithmic spiral conformal mapping.',
-    orderIndex: 6,
+    orderIndex: 9,
     difficulty: 'Intermediate',
     glsl: `vec2 toPolar(in vec2 p) {
   return vec2(length(p), atan(p.y, p.x));
@@ -113,7 +113,7 @@ $$w = \\ln(z) = \\ln(r) + i\\theta$$`
     section: '2. Geometric Transformations & Linear Algebra',
     name: 'Swirl Vortex Deformation',
     description: 'Non-linear spatial twist deformation falling off quadratically with radius.',
-    orderIndex: 7,
+    orderIndex: 10,
     difficulty: 'Intermediate',
     glsl: `mat2 rotate2D(in float angle) {
   float c = cos(angle); float s = sin(angle);
@@ -154,7 +154,7 @@ $$\\theta(r) = \\left( \\frac{R - r}{R} \\right)^2 \\cdot k$$`
     section: '2. Geometric Transformations & Linear Algebra',
     name: '3D Rodrigues Axis Rotation',
     description: 'Rotates 3D space around an arbitrary unit axis vector using Rodrigues formula.',
-    orderIndex: 24,
+    orderIndex: 11,
     difficulty: 'Hero',
     glsl: `mat3 rotateAxis(in vec3 axis, in float angle) {
   vec3 a = normalize(axis);

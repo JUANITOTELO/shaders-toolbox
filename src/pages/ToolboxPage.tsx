@@ -27,6 +27,20 @@ const getToolCode = (tool: ShaderTool): string => {
   return `// ShaderStudio IDE: ${tool.name}\n${glsl}\n\n${preview}`.trim();
 };
 
+export const getToolSolutionCode = (tool: ShaderTool, solution: string) => {
+  const glsl = (tool.glsl || '').trim();
+  const sol = (solution || '').trim();
+  if (!glsl) return sol;
+  if (!sol) return glsl;
+
+  // If the solution already includes glsl or IDE header, or if it replaces the glsl logic entirely (e.g. simd-pipeline-intro)
+  if (sol.includes(glsl) || sol.startsWith('// ShaderStudio IDE:') || sol.includes('computeBaseColor')) {
+    return sol;
+  }
+
+  return `// ShaderStudio IDE: ${tool.name}\n${glsl}\n\n${sol}`.trim();
+};
+
 export const ToolboxPage: React.FC = () => {
   const [tools, setTools] = useState<ShaderTool[]>(allTools);
   const [selectedTool, setSelectedTool] = useState<ShaderTool>(allTools[0]);
@@ -283,6 +297,11 @@ export const ToolboxPage: React.FC = () => {
     setCode(formatted);
   };
 
+  const handleApplySolution = (solution: string) => {
+    const fullSol = getToolSolutionCode(selectedTool, solution);
+    setCode(fullSol);
+  };
+
   const handleSnapshot = () => {
     const canvas = document.querySelector('canvas');
     if (!canvas) return;
@@ -398,7 +417,7 @@ export const ToolboxPage: React.FC = () => {
             onMarkdownChange={setMarkdownDoc}
             toolName={selectedTool.name}
             challenge={selectedTool.challenge}
-            onApplySolution={setCode}
+            onApplySolution={handleApplySolution}
           />
         )}
 
@@ -433,7 +452,7 @@ export const ToolboxPage: React.FC = () => {
                 onMarkdownChange={setMarkdownDoc}
                 toolName={selectedTool.name}
                 challenge={selectedTool.challenge}
-                onApplySolution={setCode}
+                onApplySolution={handleApplySolution}
               />
             </div>
           </div>

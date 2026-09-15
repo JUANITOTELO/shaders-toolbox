@@ -6,7 +6,7 @@ export const shapingTools: ShaderTool[] = [
     section: '3. Shaping Functions & Analytic Curves',
     name: 'Hermite Smoothstep',
     description: 'Cubic Hermite interpolation curve clamped to [0.0, 1.0].',
-    orderIndex: 8,
+    orderIndex: 12,
     difficulty: 'Intermediate',
     glsl: `float smoothStepHermite(in float edge0, in float edge1, in float x) {
   float t = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
@@ -40,7 +40,7 @@ $$S_1(t) = 3t^2 - 2t^3$$`
     section: '3. Shaping Functions & Analytic Curves',
     name: "Perlin's Quintic Smootherstep",
     description: 'Ken Perlin quintic S-curve with zero 1st and 2nd derivatives at endpoints.',
-    orderIndex: 9,
+    orderIndex: 13,
     difficulty: 'Intermediate',
     glsl: `float smootherstep(in float edge0, in float edge1, in float x) {
   float t = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
@@ -77,7 +77,7 @@ $$S_2(t) = 6t^5 - 15t^4 + 10t^3$$`
     section: '3. Shaping Functions & Analytic Curves',
     name: 'Schlick Bias & Gain',
     description: 'Parametric contrast and bias controls for normalizing curve distributions.',
-    orderIndex: 10,
+    orderIndex: 14,
     difficulty: 'Intermediate',
     glsl: `float bias(in float b, in float x) {
   return x / ((1.0 / b - 2.0) * (1.0 - x) + 1.0);
@@ -114,7 +114,7 @@ $$\\text{bias}_b(t) = \\frac{t}{\\left(\\frac{1}{b} - 2\\right)(1 - t) + 1}$$`
     section: '3. Shaping Functions & Analytic Curves',
     name: 'Impulses & Attenuation Curves',
     description: 'Inigo Quilez impulse curves and symmetric parabola generators.',
-    orderIndex: 11,
+    orderIndex: 15,
     difficulty: 'Intermediate',
     glsl: `float impulse(in float k, in float x) {
   float h = k * x;

@@ -6,7 +6,7 @@ export const coordinateTools: ShaderTool[] = [
     section: '1. Coordinate Spaces & Aspect Correction',
     name: 'Normalized UV',
     description: 'Normalized Device Coordinates (NDC) mapped to [0.0, 1.0].',
-    orderIndex: 1,
+    orderIndex: 4,
     difficulty: 'Beginner',
     glsl: `vec2 getUV(in vec2 fragCoord, in vec2 u_resolution) {
   return fragCoord.xy / u_resolution.xy;
@@ -45,7 +45,7 @@ Component-wise division maps $(0,0)$ to the bottom-left and $(1,1)$ to the top-r
     section: '1. Coordinate Spaces & Aspect Correction',
     name: 'Aspect-Corrected Centered UV',
     description: 'Origin (0,0) at viewport center, y in [-1.0, 1.0]. Prevents non-square pixel stretching.',
-    orderIndex: 2,
+    orderIndex: 5,
     difficulty: 'Beginner',
     glsl: `vec2 getAspectCorrectedUV(in vec2 fragCoord, in vec2 u_resolution) {
   return (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;
@@ -80,7 +80,7 @@ Normalizes strictly by viewport height $H$, guaranteeing an isotropic Euclidean 
     section: '1. Coordinate Spaces & Aspect Correction',
     name: 'Pan & Zoom Remapped UV',
     description: 'Screen-to-UV remapping with interactive pan offset and zoom scale factor.',
-    orderIndex: 3,
+    orderIndex: 6,
     difficulty: 'Beginner',
     glsl: `vec2 getTransformedUV(in vec2 fragCoord, in vec2 u_resolution, in vec2 pan, in float zoom) {
   vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;

@@ -6,7 +6,7 @@ export const colorTools: ShaderTool[] = [
     section: '8. Color Science & Spectral Synthesis',
     name: 'Inigo Quilez Cosine Palettes',
     description: 'Cyclic harmonic color palettes using 4-vector cosine formulation.',
-    orderIndex: 25,
+    orderIndex: 30,
     difficulty: 'Advanced',
     glsl: `vec3 cosinePalette(in float t, in vec3 a, in vec3 b, in vec3 c, in vec3 d) {
   const float TAU = 6.28318530718;
@@ -45,7 +45,7 @@ $$\\mathbf{C}(t) = \\mathbf{a} + \\mathbf{b} \\cos\\left( 2\\pi (\\mathbf{c} t +
     section: '8. Color Science & Spectral Synthesis',
     name: 'HSV to Linear sRGB',
     description: 'Branchless hue, saturation, and value color conversion.',
-    orderIndex: 26,
+    orderIndex: 31,
     difficulty: 'Advanced',
     glsl: `vec3 hsv2rgb(in vec3 c) {
   vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
@@ -81,7 +81,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     section: '8. Color Science & Spectral Synthesis',
     name: 'Oklab Perceptually Uniform Space',
     description: 'Uniform lightness and chroma color mixing, eliminating muddy middle transitions and hue shifts.',
-    orderIndex: 27,
+    orderIndex: 32,
     difficulty: 'Advanced',
     glsl: `vec3 rgbToOklab(in vec3 c) {
   float l = 0.4122214708 * c.r + 0.5363325363 * c.g + 0.0514459929 * c.b;
@@ -125,12 +125,11 @@ vec3 oklabMix(in vec3 colA, in vec3 colB, in float t) {
     challenge: {
       prompt: 'Compare cyan-to-magenta mixing between naive RGB and Oklab to observe chromatic vibrancy preservation.',
       hint: 'vec3 cyan = vec3(0.0, 1.0, 1.0); vec3 magenta = vec3(1.0, 0.0, 1.0);',
-      solution: `vec3 oklabMixTest(in vec3 colA, in vec3 colB, in float t);
-void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+      solution: `void mainImage(out vec4 fragColor, in vec2 fragCoord) {
   vec2 uv = fragCoord.xy / u_resolution.xy;
   vec3 cyan = vec3(0.0, 1.0, 1.0);
   vec3 magenta = vec3(1.0, 0.0, 1.0);
-  vec3 col = (uv.y > 0.5) ? mix(cyan, magenta, uv.x) : mix(cyan, magenta, uv.x);
+  vec3 col = (uv.y > 0.5) ? mix(cyan, magenta, uv.x) : oklabMix(cyan, magenta, uv.x);
   fragColor = vec4(col, 1.0);
 }`
     },

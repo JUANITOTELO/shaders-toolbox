@@ -6,7 +6,7 @@ export const sdfTools: ShaderTool[] = [
     section: '6. 2D Signed Distance Fields & Operators',
     name: 'Circle SDF',
     description: 'Exact Euclidean signed distance field to a circle boundary.',
-    orderIndex: 12,
+    orderIndex: 23,
     difficulty: 'Intermediate',
     glsl: `float sdCircle(in vec2 p, in float r) {
   return length(p) - r;
@@ -42,7 +42,7 @@ $$d(\\mathbf{p}) = \\|\\mathbf{p}\\| - r$$`
     section: '6. 2D Signed Distance Fields & Operators',
     name: 'Axis-Aligned Box SDF',
     description: 'Exact exterior and interior signed distance to a box with half-bounds b.',
-    orderIndex: 13,
+    orderIndex: 24,
     difficulty: 'Intermediate',
     glsl: `float sdBox(in vec2 p, in vec2 b) {
   vec2 d = abs(p) - b;
@@ -83,7 +83,7 @@ $$d(\\mathbf{p}) = \\|\\max(|\\mathbf{p}| - \\mathbf{b}, \\mathbf{0})\\| + \\min
     section: '6. 2D Signed Distance Fields & Operators',
     name: 'Segment, Triangle & Ring SDFs',
     description: 'Segment line distance, regular equilateral triangle, and stroke ring primitives.',
-    orderIndex: 14,
+    orderIndex: 25,
     difficulty: 'Intermediate',
     glsl: `float sdSegment(in vec2 p, in vec2 a, in vec2 b) {
   vec2 pa = p - a; vec2 ba = b - a;
@@ -132,7 +132,7 @@ float renderSDF(in float d) {
     section: '6. 2D Signed Distance Fields & Operators',
     name: 'Constructive Solid Geometry (CSG) & Smooth Blends',
     description: 'Exact union, intersection, subtraction, and polynomial smooth blending operators.',
-    orderIndex: 15,
+    orderIndex: 26,
     difficulty: 'Intermediate',
     glsl: `float opUnion(in float d1, in float d2) { return min(d1, d2); }
 float opIntersection(in float d1, in float d2) { return max(d1, d2); }

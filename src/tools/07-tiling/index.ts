@@ -6,7 +6,7 @@ export const tilingTools: ShaderTool[] = [
     section: '7. Procedural Tiling, Lattices & Symmetry',
     name: 'Domain Repetition (Infinite & Clamped)',
     description: 'Periodic domain modulus repetition and finite clamped lattice boundaries.',
-    orderIndex: 16,
+    orderIndex: 27,
     difficulty: 'Advanced',
     glsl: `vec2 opRepetition(in vec2 p, in vec2 c) {
   return mod(p + 0.5 * c, c) - 0.5 * c;
@@ -42,7 +42,7 @@ $$\\mathbf{p}' = \\text{mod}(\\mathbf{p} + 0.5\\mathbf{c}, \\mathbf{c}) - 0.5\\m
     section: '7. Procedural Tiling, Lattices & Symmetry',
     name: 'Hexagonal Grid Tiling',
     description: 'Decomposes 2D space into discrete hexagonal cell indices and centered local coordinates.',
-    orderIndex: 17,
+    orderIndex: 28,
     difficulty: 'Advanced',
     glsl: `struct HexGrid {
   vec2 id;
@@ -87,7 +87,7 @@ $$\\mathbf{r} = (1.0, \\sqrt{3}) \\approx (1.0, 1.73205)$$`
     section: '7. Procedural Tiling, Lattices & Symmetry',
     name: 'Truchet Labyrinth Tiling',
     description: 'Multi-arc labyrinth procedural tiling with random diagonal lattice flipping.',
-    orderIndex: 18,
+    orderIndex: 29,
     difficulty: 'Advanced',
     glsl: `float hash21(in vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
