@@ -110,8 +110,14 @@ function runSync() {
   const dbSrc = path.join(sourceRoot, 'backend', 'database.sqlite');
   if (fs.existsSync(dbSrc)) {
     // Copy to both api/database.sqlite and api/data/database.sqlite for maximum compatibility
-    fs.copyFileSync(dbSrc, path.join(targetApiDir, 'database.sqlite'));
-    fs.copyFileSync(dbSrc, path.join(targetApiDir, 'data', 'database.sqlite'));
+    const dest1 = path.join(targetApiDir, 'database.sqlite');
+    const dest2 = path.join(targetApiDir, 'data', 'database.sqlite');
+    fs.copyFileSync(dbSrc, dest1);
+    fs.copyFileSync(dbSrc, dest2);
+    try {
+      fs.chmodSync(dest1, 0o666);
+      fs.chmodSync(dest2, 0o666);
+    } catch {}
   }
 
   // Copy or generate api/.htaccess
