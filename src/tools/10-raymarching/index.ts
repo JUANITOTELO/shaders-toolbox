@@ -16,36 +16,150 @@ export const raymarchingTools: ShaderTool[] = [
   return mat3(cu, cv, cw);
 }
 
-vec3 getRayDirection(in vec2 uv, in vec3 ro, in vec3 ta, in float fov) {
-  mat3 cam = setCamera(ro, ta, 0.0);
+vec3 getRayDirection(in vec2 uv, in vec3 ro, in vec3 ta, in float cr, in float fov) {
+  mat3 cam = setCamera(ro, ta, cr);
   return normalize(cam * vec3(uv, fov));
+}
+
+vec3 getRayDirection(in vec2 uv, in vec3 ro, in vec3 ta, in float fov) {
+  return getRayDirection(uv, ro, ta, 0.0, fov);
 }`,
     defaultParams: {},
-    previewMain: `void mainImage(out vec4 fragColor, in vec2 fragCoord) {
-  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;
-  vec3 ro = vec3(2.5 * sin(u_time * 0.5), 1.5, 2.5 * cos(u_time * 0.5));
-  vec3 ta = vec3(0.0, 0.0, 0.0);
-  vec3 rd = getRayDirection(uv, ro, ta, 1.5);
-  // Visualize world ray directions mapped to color
-  fragColor = vec4(0.5 + 0.5 * rd, 1.0);
-}`,
-    challenge: {
-      prompt: 'Modify the camera roll angle cr in setCamera() to animate a Dutch angle tilt with sin(u_time).',
-      hint: 'Pass sin(u_time) * 0.5 as the cr roll parameter in setCamera().',
-      solution: `mat3 setCameraCustom(in vec3 ro, in vec3 ta, in float cr) {
-  vec3 cw = normalize(ta - ro);
-  vec3 cp = vec3(sin(cr), cos(cr), 0.0);
-  vec3 cu = normalize(cross(cw, cp));
-  vec3 cv = cross(cu, cw);
-  return mat3(cu, cv, cw);
+    previewMain: `float mapScene(in vec3 p) {
+  float sphere = length(p - vec3(0.0, 0.0, 0.0)) - 0.75;
+  float plane = p.y + 0.75;
+  return min(sphere, plane);
 }
+
+vec3 calcNormal(in vec3 p) {
+  vec2 e = vec2(0.001, -0.001);
+  return normalize(
+    e.xyy * mapScene(p + e.xyy) +
+    e.yyx * mapScene(p + e.yyx) +
+    e.yxy * mapScene(p + e.yxy) +
+    e.xxx * mapScene(p + e.xxx)
+  );
+}
+
+float calcShadow(in vec3 ro, in vec3 rd) {
+  float res = 1.0;
+  float t = 0.02;
+  for (int i = 0; i < 32; i++) {
+    float h = mapScene(ro + rd * t);
+    if (h < 0.001) return 0.0;
+    res = min(res, 8.0 * h / t);
+    t += h;
+    if (t > 4.0) break;
+  }
+  return clamp(res, 0.0, 1.0);
+}
+
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
   vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;
-  vec3 ro = vec3(0.0, 0.0, 3.0);
-  vec3 ta = vec3(0.0);
-  mat3 cam = setCameraCustom(ro, ta, sin(u_time));
-  vec3 rd = normalize(cam * vec3(uv, 1.5));
-  fragColor = vec4(0.5 + 0.5 * rd, 1.0);
+  
+  // Interactive orbiting camera position and look-at target
+  float angle = u_time * 0.4;
+  vec3 ro = vec3(3.0 * sin(angle), 1.6, 3.0 * cos(angle));
+  vec3 ta = vec3(0.0, 0.0, 0.0);
+  
+  // Generate primary camera ray through the virtual pinhole
+  vec3 rd = getRayDirection(uv, ro, ta, 1.5);
+  
+  // Raymarch scene
+  float t = 0.0;
+  for (int i = 0; i < 64; i++) {
+    vec3 p = ro + rd * t;
+    float d = mapScene(p);
+    if (d < 0.001) break;
+    t += d;
+    if (t > 20.0) break;
+  }
+  
+  // Sky background
+  vec3 col = vec3(0.05, 0.07, 0.12) - max(rd.y * 0.5, 0.0);
+  
+  if (t < 20.0) {
+    vec3 p = ro + rd * t;
+    vec3 nor = calcNormal(p);
+    vec3 lig = normalize(vec3(1.0, 2.0, 1.2));
+    
+    // Material coloring: checkerboard floor vs sphere
+    vec3 mate = (p.y > -0.74) ? vec3(0.95, 0.45, 0.25) : vec3(0.3 + 0.15 * mod(floor(p.x * 2.0) + floor(p.z * 2.0), 2.0));
+    
+    float diff = max(dot(nor, lig), 0.0);
+    float sh = calcShadow(p + nor * 0.005, lig);
+    float amb = clamp(0.5 + 0.5 * nor.y, 0.0, 1.0);
+    
+    col = mate * (diff * sh * vec3(1.2, 1.1, 0.9) + amb * vec3(0.15, 0.2, 0.3));
+    col = mix(col, vec3(0.05, 0.07, 0.12), 1.0 - exp(-0.02 * t * t));
+  }
+  
+  // Tonemapping & gamma
+  col = pow(col, vec3(1.0 / 2.2));
+  fragColor = vec4(col, 1.0);
+}`,
+    challenge: {
+      prompt: 'Modify the camera roll angle cr in getRayDirection() to animate a Dutch angle tilt with sin(u_time * 1.5) * 0.4.',
+      hint: 'Pass sin(u_time * 1.5) * 0.4 as the cr roll parameter in getRayDirection(uv, ro, ta, cr, fov).',
+      solution: `float mapScene(in vec3 p) {
+  float sphere = length(p - vec3(0.0, 0.0, 0.0)) - 0.75;
+  float plane = p.y + 0.75;
+  return min(sphere, plane);
+}
+
+vec3 calcNormal(in vec3 p) {
+  vec2 e = vec2(0.001, -0.001);
+  return normalize(
+    e.xyy * mapScene(p + e.xyy) +
+    e.yyx * mapScene(p + e.yyx) +
+    e.yxy * mapScene(p + e.yxy) +
+    e.xxx * mapScene(p + e.xxx)
+  );
+}
+
+float calcShadow(in vec3 ro, in vec3 rd) {
+  float res = 1.0;
+  float t = 0.02;
+  for (int i = 0; i < 32; i++) {
+    float h = mapScene(ro + rd * t);
+    if (h < 0.001) return 0.0;
+    res = min(res, 8.0 * h / t);
+    t += h;
+    if (t > 4.0) break;
+  }
+  return clamp(res, 0.0, 1.0);
+}
+
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;
+  float angle = u_time * 0.4;
+  vec3 ro = vec3(3.0 * sin(angle), 1.6, 3.0 * cos(angle));
+  vec3 ta = vec3(0.0, 0.0, 0.0);
+  float cr = sin(u_time * 1.5) * 0.4;
+  vec3 rd = getRayDirection(uv, ro, ta, cr, 1.5);
+  
+  float t = 0.0;
+  for (int i = 0; i < 64; i++) {
+    vec3 p = ro + rd * t;
+    float d = mapScene(p);
+    if (d < 0.001) break;
+    t += d;
+    if (t > 20.0) break;
+  }
+  
+  vec3 col = vec3(0.05, 0.07, 0.12) - max(rd.y * 0.5, 0.0);
+  if (t < 20.0) {
+    vec3 p = ro + rd * t;
+    vec3 nor = calcNormal(p);
+    vec3 lig = normalize(vec3(1.0, 2.0, 1.2));
+    vec3 mate = (p.y > -0.74) ? vec3(0.95, 0.45, 0.25) : vec3(0.3 + 0.15 * mod(floor(p.x * 2.0) + floor(p.z * 2.0), 2.0));
+    float diff = max(dot(nor, lig), 0.0);
+    float sh = calcShadow(p + nor * 0.005, lig);
+    float amb = clamp(0.5 + 0.5 * nor.y, 0.0, 1.0);
+    col = mate * (diff * sh * vec3(1.2, 1.1, 0.9) + amb * vec3(0.15, 0.2, 0.3));
+    col = mix(col, vec3(0.05, 0.07, 0.12), 1.0 - exp(-0.02 * t * t));
+  }
+  fragColor = vec4(pow(col, vec3(1.0 / 2.2)), 1.0);
 }`
     },
     markdownDoc: `# 3D Pinhole Camera Model & Orthonormal LookAt Matrix

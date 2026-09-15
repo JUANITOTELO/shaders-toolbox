@@ -11,7 +11,7 @@ export const transformationTools: ShaderTool[] = [
     glsl: `mat2 rotate2D(in float angle) {
   float c = cos(angle);
   float s = sin(angle);
-  return mat2(c, -s, s, c);
+  return mat2(c, s, -s, c);
 }`,
     defaultParams: {},
     previewMain: `void mainImage(out vec4 fragColor, in vec2 fragCoord) {
@@ -117,7 +117,7 @@ $$w = \\ln(z) = \\ln(r) + i\\theta$$`
     difficulty: 'Intermediate',
     glsl: `mat2 rotate2D(in float angle) {
   float c = cos(angle); float s = sin(angle);
-  return mat2(c, -s, s, c);
+  return mat2(c, s, -s, c);
 }
 vec2 swirl(in vec2 p, in float strength, in float radius) {
   float dist = length(p);
@@ -156,31 +156,87 @@ $$\\theta(r) = \\left( \\frac{R - r}{R} \\right)^2 \\cdot k$$`
     description: 'Rotates 3D space around an arbitrary unit axis vector using Rodrigues formula.',
     orderIndex: 11,
     difficulty: 'Hero',
-    glsl: `mat3 rotateAxis(in vec3 axis, in float angle) {
+    glsl: `// Rodrigues' Rotation Formula in GLSL Column-Major Representation:
+// R(a, theta) = cos(theta)*I + (1 - cos(theta))*(a (x) a) + sin(theta)*[a]x
+mat3 rotateAxis(in vec3 axis, in float angle) {
   vec3 a = normalize(axis);
   float s = sin(angle);
   float c = cos(angle);
   float oc = 1.0 - c;
   return mat3(
-    oc * a.x * a.x + c,        oc * a.x * a.y - a.z * s, oc * a.z * a.x + a.y * s,
-    oc * a.x * a.y + a.z * s, oc * a.y * a.y + c,        oc * a.y * a.z - a.x * s,
-    oc * a.z * a.x - a.y * s, oc * a.y * a.z + a.x * s, oc * a.z * a.z + c
+    vec3(oc * a.x * a.x + c,        oc * a.x * a.y + a.z * s, oc * a.z * a.x - a.y * s), // Column 0
+    vec3(oc * a.x * a.y - a.z * s, oc * a.y * a.y + c,        oc * a.y * a.z + a.x * s), // Column 1
+    vec3(oc * a.z * a.x + a.y * s, oc * a.y * a.z - a.x * s, oc * a.z * a.z + c)         // Column 2
   );
 }`,
     defaultParams: {},
-    previewMain: `void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    previewMain: `float sdBox(in vec3 p, in vec3 b) {
+  vec3 q = abs(p) - b;
+  return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
+}
+
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
   vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;
-  vec3 p = vec3(uv, 1.0);
-  p = rotateAxis(vec3(1.0, 1.0, 0.5), u_time) * p;
-  fragColor = vec4(0.5 + 0.5 * p, 1.0);
+  vec3 ro = vec3(0.0, 0.0, 2.6);
+  vec3 rd = normalize(vec3(uv, -1.5));
+  
+  // Rotate 3D volume around arbitrary axis using Rodrigues' matrix
+  vec3 axis = normalize(vec3(1.0, 1.0, 0.5));
+  mat3 rot = rotateAxis(axis, u_time);
+  
+  float t = 0.0;
+  for (int i = 0; i < 64; i++) {
+    vec3 p = ro + rd * t;
+    vec3 pRot = rot * p; // Exact 3D Rodrigues rotation
+    float d = sdBox(pRot, vec3(0.55)) - 0.04;
+    if (d < 0.001) break;
+    t += d;
+    if (t > 5.0) break;
+  }
+  
+  if (t < 5.0) {
+    vec3 p = rot * (ro + rd * t);
+    vec3 nor = normalize(sign(p) * step(max(abs(p).yzx, abs(p).zxy), abs(p).xyz));
+    vec3 lig = normalize(vec3(1.0, 1.5, 1.0));
+    float diff = max(dot(nor, lig), 0.0);
+    vec3 col = (0.5 + 0.5 * nor) * (diff * 0.8 + 0.2);
+    fragColor = vec4(col, 1.0);
+  } else {
+    fragColor = vec4(0.03, 0.03, 0.06, 1.0);
+  }
 }`,
     challenge: {
-      prompt: 'Rotate space around the diagonal axis (1, 1, 1) and project a 3D unit cube wireframe onto the 2D screen.',
-      hint: 'Rotate vec3(uv, z) around normalize(vec3(1.0, 1.0, 1.0)).',
+      prompt: 'Rotate the 3D cube around the diagonal axis (1, 1, 1) and accelerate rotation speed with u_time * 2.0.',
+      hint: 'mat3 rot = rotateAxis(normalize(vec3(1.0, 1.0, 1.0)), u_time * 2.0);',
       solution: `void mainImage(out vec4 fragColor, in vec2 fragCoord) {
   vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;
-  vec3 p = rotateAxis(vec3(1.0, 1.0, 1.0), u_time) * vec3(uv, 0.5);
-  fragColor = vec4(abs(p), 1.0);
+  vec3 ro = vec3(0.0, 0.0, 2.6);
+  vec3 rd = normalize(vec3(uv, -1.5));
+  
+  vec3 axis = normalize(vec3(1.0, 1.0, 1.0));
+  mat3 rot = rotateAxis(axis, u_time * 2.0);
+  
+  float t = 0.0;
+  for (int i = 0; i < 64; i++) {
+    vec3 p = ro + rd * t;
+    vec3 pRot = rot * p;
+    vec3 q = abs(pRot) - vec3(0.55);
+    float d = length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - 0.04;
+    if (d < 0.001) break;
+    t += d;
+    if (t > 5.0) break;
+  }
+  
+  if (t < 5.0) {
+    vec3 p = rot * (ro + rd * t);
+    vec3 nor = normalize(sign(p) * step(max(abs(p).yzx, abs(p).zxy), abs(p).xyz));
+    vec3 lig = normalize(vec3(1.0, 1.5, 1.0));
+    float diff = max(dot(nor, lig), 0.0);
+    vec3 col = (0.5 + 0.5 * nor) * (diff * 0.8 + 0.2);
+    fragColor = vec4(col, 1.0);
+  } else {
+    fragColor = vec4(0.03, 0.03, 0.06, 1.0);
+  }
 }`
     },
     markdownDoc: `# 3D Rodrigues' Rotation Matrix

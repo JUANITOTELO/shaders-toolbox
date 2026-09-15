@@ -22,7 +22,7 @@ float perlinNoise(in vec2 p) {
 }
 mat2 rotate2D(in float angle) {
   float c = cos(angle); float s = sin(angle);
-  return mat2(c, -s, s, c);
+  return mat2(c, s, -s, c);
 }
 float fbm(in vec2 p, in int octaves, in float lacunarity, in float gain) {
   float sum = 0.0;
@@ -79,7 +79,7 @@ float perlinNoise(in vec2 p) {
 }
 mat2 rotate2D(in float angle) {
   float c = cos(angle); float s = sin(angle);
-  return mat2(c, -s, s, c);
+  return mat2(c, s, -s, c);
 }
 float fbm(in vec2 p) {
   float sum = 0.0; float amp = 1.0; float freq = 1.0;
