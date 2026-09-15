@@ -52,11 +52,63 @@ class Database {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );");
 
+        // Tools table (Data-Driven Architecture)
+        $this->conn->exec("CREATE TABLE IF NOT EXISTS tools (
+            id TEXT PRIMARY KEY,
+            section TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT,
+            glsl TEXT NOT NULL,
+            default_params TEXT DEFAULT '{}',
+            preview_main TEXT NOT NULL,
+            markdown_doc TEXT DEFAULT '',
+            order_index INTEGER DEFAULT 0,
+            difficulty TEXT DEFAULT 'Beginner',
+            challenge_json TEXT DEFAULT '{}',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );");
+
         // Try adding any new columns if table already exists
         try { $this->conn->exec("ALTER TABLE presets ADD COLUMN markdown_doc TEXT DEFAULT '';"); } catch(Exception $e) {}
         try { $this->conn->exec("ALTER TABLE presets ADD COLUMN difficulty TEXT DEFAULT 'Beginner';"); } catch(Exception $e) {}
         try { $this->conn->exec("ALTER TABLE presets ADD COLUMN order_index INTEGER DEFAULT 0;"); } catch(Exception $e) {}
         try { $this->conn->exec("ALTER TABLE presets ADD COLUMN challenge_json TEXT DEFAULT '';"); } catch(Exception $e) {}
+
+        // Seed Tools table if empty
+        $stmtTools = $this->conn->prepare("SELECT COUNT(*) FROM tools");
+        $stmtTools->execute();
+        $toolCount = (int)$stmtTools->fetchColumn();
+
+        if ($toolCount === 0) {
+            $seedFile = __DIR__ . '/../data/seed_tools.json';
+            if (file_exists($seedFile)) {
+                $toolsData = json_decode(file_get_contents($seedFile), true);
+                if (is_array($toolsData)) {
+                    $insertStmt = $this->conn->prepare("
+                        INSERT INTO tools (id, section, name, description, glsl, default_params, preview_main, markdown_doc, order_index, difficulty, challenge_json)
+                        VALUES (:id, :section, :name, :description, :glsl, :default_params, :preview_main, :markdown_doc, :order_index, :difficulty, :challenge_json)
+                    ");
+                    foreach ($toolsData as $t) {
+                        $defaultParams = isset($t['defaultParams']) ? json_encode($t['defaultParams']) : '{}';
+                        $challengeJson = isset($t['challenge']) ? json_encode($t['challenge']) : '{}';
+                        $insertStmt->execute([
+                            ':id' => $t['id'],
+                            ':section' => $t['section'] ?? 'Uncategorized',
+                            ':name' => $t['name'],
+                            ':description' => $t['description'] ?? '',
+                            ':glsl' => $t['glsl'] ?? '',
+                            ':default_params' => $defaultParams,
+                            ':preview_main' => $t['previewMain'] ?? '',
+                            ':markdown_doc' => $t['markdownDoc'] ?? '',
+                            ':order_index' => $t['orderIndex'] ?? 0,
+                            ':difficulty' => $t['difficulty'] ?? 'Beginner',
+                            ':challenge_json' => $challengeJson
+                        ]);
+                    }
+                }
+            }
+        }
 
         // Deduplicate categories by slug and remove redundant entries
         try {

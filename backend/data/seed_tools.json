@@ -1,0 +1,699 @@
+[
+  {
+    "id": "simd-pipeline-intro",
+    "section": "0. The GPU Mental Model & Pipeline",
+    "name": "The SIMD Parallel Mental Model",
+    "description": "Understanding massively parallel GPU execution: millions of fragments computing concurrently with zero CPU-style loops.",
+    "orderIndex": 1,
+    "difficulty": "Beginner",
+    "glsl": "// The simplest fragment shader in GLSL ES 3.00:\n// Every pixel executes this identical code in parallel.\nvec4 computeBaseColor(in vec2 fragCoord, in vec2 u_resolution) {\n  // Pure static color vector (Red, Green, Blue, Alpha)\n  return vec4(0.2, 0.6, 1.0, 1.0);\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  fragColor = computeBaseColor(fragCoord, u_resolution);\n}",
+    "challenge": {
+      "prompt": "Change the output color to a warm sunset orange (Red: 1.0, Green: 0.5, Blue: 0.1, Alpha: 1.0).",
+      "hint": "Return vec4(1.0, 0.5, 0.1, 1.0); in computeBaseColor.",
+      "solution": "vec4 computeBaseColor(in vec2 fragCoord, in vec2 u_resolution) {\n  return vec4(1.0, 0.5, 0.1, 1.0);\n}\nvoid mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  fragColor = computeBaseColor(fragCoord, u_resolution);\n}"
+    },
+    "markdownDoc": "# The GPU Mental Model & The SIMD Execution Pipeline\n\n## 1. Architectural Theory: The CPU vs. GPU Paradigm Shift\nOn a traditional CPU, drawing an image requires an explicit double loop:\n```cpp\nfor (int y = 0; y < height; y++) {\n  for (int x = 0; x < width; x++) {\n    setPixelColor(x, y, calculateColor(x, y));\n  }\n}\n```\n\nOn a GPU, **there is no loop**. A GPU is an ultra-wide parallel computing machine utilizing **SIMD (Single Instruction, Multiple Data)** and **SIMT (Single Instruction, Multiple Threads)** architectures:\n- Millions of pixels run the exact same compiled fragment shader concurrently in warps (NVIDIA: 32 threads) or wavefronts (AMD: 64 threads).\n- Each thread computes only for its single assigned pixel location, accessible via `gl_FragCoord.xy`.\n- All threads execute in lockstep across hardware execution units.\n\n## 2. GLSL Pipeline Breakdown & Memory Spaces\n```glsl\n#version 300 es\nprecision highp float;\nout vec4 fragColor;\nuniform vec2 u_resolution;\nuniform float u_time;\n```\n1. **Qualifiers**:\n   - `in`: Read-only function parameter or interpolated attribute from vertex stages.\n   - `out`: The final pixel color sent to the framebuffer (`out vec4 fragColor`).\n   - `uniform`: Global constant across all parallel threads for the entire draw call (e.g. screen resolution, elapsed time, mouse input).\n2. **Color Normalization**:\n   - Unlike 8-bit integers ($0 - 255$), GPU color components are strictly normalized floating-point numbers in range $[0.0, 1.0]$."
+  },
+  {
+    "id": "get-uv",
+    "section": "1. Coordinate Spaces & Aspect Correction",
+    "name": "Normalized UV",
+    "description": "Normalized Device Coordinates (NDC) mapped to [0.0, 1.0].",
+    "orderIndex": 1,
+    "difficulty": "Beginner",
+    "glsl": "vec2 getUV(in vec2 fragCoord, in vec2 u_resolution) {\n  return fragCoord.xy / u_resolution.xy;\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = getUV(fragCoord, u_resolution);\n  fragColor = vec4(uv, 0.5 + 0.5 * sin(u_time), 1.0);\n}",
+    "challenge": {
+      "prompt": "Multiply the UV coordinate by 2.0 and use fract() to create a 2x2 repeating grid of color gradients across the screen.",
+      "hint": "vec2 gridUV = fract(uv * 2.0); then output vec4(gridUV, 0.0, 1.0);",
+      "solution": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = getUV(fragCoord, u_resolution);\n  vec2 gridUV = fract(uv * 2.0);\n  fragColor = vec4(gridUV, 0.5 + 0.5 * sin(u_time), 1.0);\n}"
+    },
+    "markdownDoc": "# Normalized UV Coordinates (NDC Mapping)\n\n## 1. Mathematical Formulation & Theory\nFragment shaders receive raw screen coordinates in integer/half-integer pixels via `gl_FragCoord.xy`. We define a mapping from viewport pixel space $\\mathbf{P} \\in [0, W] \\times [0, H]$ to the normalized unit square $\\mathbf{U} \\in [0.0, 1.0]^2$:\n\n$$\\mathbf{u}(x, y) = \\left( \\frac{x}{W}, \\frac{y}{H} \\right)$$\n\n## 2. GLSL Code Implementation Breakdown\n```glsl\nvec2 getUV(in vec2 fragCoord, in vec2 u_resolution) {\n  return fragCoord.xy / u_resolution.xy;\n}\n```\nComponent-wise division maps $(0,0)$ to the bottom-left and $(1,1)$ to the top-right."
+  },
+  {
+    "id": "vectors-and-swizzling",
+    "section": "0. The GPU Mental Model & Pipeline",
+    "name": "Vector Math & Swizzling",
+    "description": "Mastering vector constructors, component extraction, and SIMD swizzling (.xyzw, .rgba, .stpq).",
+    "orderIndex": 2,
+    "difficulty": "Beginner",
+    "glsl": "vec3 demonstrateSwizzling(in vec2 uv) {\n  vec3 base = vec3(uv.x, uv.y, 0.5);\n  // Swizzling: reorder or duplicate components instantaneously in hardware\n  vec3 reversed = base.zyx;\n  return reversed;\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy;\n  vec3 col = demonstrateSwizzling(uv);\n  fragColor = vec4(col, 1.0);\n}",
+    "challenge": {
+      "prompt": "Extract and invert the green channel using swizzling so green increases from top to bottom (1.0 - uv.y).",
+      "hint": "vec3 col = vec3(uv.x, 1.0 - uv.y, 0.5);",
+      "solution": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy;\n  vec3 col = vec3(uv.x, 1.0 - uv.y, 0.8);\n  fragColor = vec4(col, 1.0);\n}"
+    },
+    "markdownDoc": "# Vector Math & Hardware Swizzling\n\n## 1. Vector Types in GLSL\nGLSL provides first-class vector types with hardware-level SIMD operations:\n- `vec2`: $(x, y)$ or $(u, v)$\n- `vec3`: $(x, y, z)$ or $(r, g, b)$\n- `vec4`: $(x, y, z, w)$ or $(r, g, b, a)$\n\n## 2. Swizzling Mechanics\nComponents can be accessed and reordered without memory copies:\n- `v.xy`: Returns a `vec2` containing $x$ and $y$.\n- `v.bgr`: Returns a `vec3` with red and blue channels swapped.\n- `v.xxxx`: Broadcasts the $x$ component across a `vec4`."
+  },
+  {
+    "id": "aspect-corrected-uv",
+    "section": "1. Coordinate Spaces & Aspect Correction",
+    "name": "Aspect-Corrected Centered UV",
+    "description": "Origin (0,0) at viewport center, y in [-1.0, 1.0]. Prevents non-square pixel stretching.",
+    "orderIndex": 2,
+    "difficulty": "Beginner",
+    "glsl": "vec2 getAspectCorrectedUV(in vec2 fragCoord, in vec2 u_resolution) {\n  return (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = getAspectCorrectedUV(fragCoord, u_resolution);\n  float d = length(uv);\n  vec3 col = vec3(smoothstep(0.5, 0.49, d));\n  fragColor = vec4(col, 1.0);\n}",
+    "challenge": {
+      "prompt": "Modify the smoothstep threshold and add an animated pulsing radius based on sin(u_time) so the centered circle pulses smoothly.",
+      "hint": "float radius = 0.5 + 0.2 * sin(u_time * 3.0); then smoothstep(radius, radius - 0.01, d);",
+      "solution": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = getAspectCorrectedUV(fragCoord, u_resolution);\n  float radius = 0.5 + 0.2 * sin(u_time * 3.0);\n  float d = length(uv);\n  vec3 col = vec3(smoothstep(radius, radius - 0.01, d));\n  fragColor = vec4(col * vec3(0.3, 0.7, 1.0), 1.0);\n}"
+    },
+    "markdownDoc": "# Aspect-Corrected Centered UV Coordinates\n\n## 1. Mathematical Formulation\n$$\\mathbf{p}(x, y) = \\frac{2\\mathbf{x} - \\mathbf{R}}{H}$$\n\nNormalizes strictly by viewport height $H$, guaranteeing an isotropic Euclidean metric."
+  },
+  {
+    "id": "branchless-programming",
+    "section": "0. The GPU Mental Model & Pipeline",
+    "name": "Branchless Logic: step() & mix()",
+    "description": "Eliminating GPU thread divergence: replacing slow if/else branches with hardware step() and mix() instructions.",
+    "orderIndex": 3,
+    "difficulty": "Beginner",
+    "glsl": "vec3 branchlessSplit(in vec2 uv) {\n  // Step function: step(edge, x) returns 0.0 if x < edge, 1.0 if x >= edge\n  float mask = step(0.5, uv.x);\n  \n  vec3 leftColor = vec3(0.1, 0.2, 0.5);\n  vec3 rightColor = vec3(0.9, 0.4, 0.1);\n  \n  // Linear interpolation: mix(x, y, a) = x * (1 - a) + y * a\n  return mix(leftColor, rightColor, mask);\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy;\n  vec3 col = branchlessSplit(uv);\n  fragColor = vec4(col, 1.0);\n}",
+    "challenge": {
+      "prompt": "Create a 3-stripe flag by using two step() thresholds (at 0.33 and 0.66) combined with mix().",
+      "hint": "float m1 = step(0.33, uv.x); float m2 = step(0.66, uv.x);",
+      "solution": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy;\n  float m1 = step(0.33, uv.x);\n  float m2 = step(0.66, uv.x);\n  vec3 col = mix(vec3(0.9, 0.2, 0.2), vec3(0.9, 0.9, 0.2), m1);\n  col = mix(col, vec3(0.2, 0.4, 0.9), m2);\n  fragColor = vec4(col, 1.0);\n}"
+    },
+    "markdownDoc": "# Branchless Programming & Thread Divergence\n\n## 1. Why if/else Kills GPU Performance\nGPUs execute instructions across groups of threads called **warps** (NVIDIA) or **wavefronts** (AMD).\nWhen an `if (condition)` is evaluated:\n- If all 32 threads in the warp take the same branch, execution proceeds at full speed.\n- If some threads take the `if` branch while others take the `else` branch, **branch divergence** occurs: the GPU must serialize both branches, executing the `if` body while masking out the `else` threads, then executing the `else` body while masking out the `if` threads. Throughput drops by 50%!\n\n## 2. Hardware Replacement Primitives\n1. **`step(edge, x)`**:\n   $$f(x) = \\begin{cases} 0.0 & x < \\text{edge} \\\\ 1.0 & x \\ge \\text{edge} \\end{cases}$$\n2. **`clamp(x, minVal, maxVal)`**:\n   $$\\min(\\max(x, \\text{minVal}), \\text{maxVal})$$\n3. **`mix(x, y, a)`**:\n   $$x \\cdot (1 - a) + y \\cdot a$$"
+  },
+  {
+    "id": "transformed-uv",
+    "section": "1. Coordinate Spaces & Aspect Correction",
+    "name": "Pan & Zoom Remapped UV",
+    "description": "Screen-to-UV remapping with interactive pan offset and zoom scale factor.",
+    "orderIndex": 3,
+    "difficulty": "Beginner",
+    "glsl": "vec2 getTransformedUV(in vec2 fragCoord, in vec2 u_resolution, in vec2 pan, in float zoom) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  return (uv - pan) / zoom;\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 pan = vec2(sin(u_time * 0.8) * 0.3, cos(u_time * 0.8) * 0.2);\n  float zoom = 1.0 + 0.5 * sin(u_time);\n  vec2 uv = getTransformedUV(fragCoord, u_resolution, pan, zoom);\n  vec3 col = vec3(step(0.0, sin(uv.x * 20.0)) * step(0.0, sin(uv.y * 20.0)));\n  fragColor = vec4(col * vec3(0.3, 0.6, 1.0), 1.0);\n}",
+    "challenge": {
+      "prompt": "Connect mouse coordinates from u_mouse.xy to the pan vector so you can click and pan the grid with your mouse cursor.",
+      "hint": "vec2 mousePan = (2.0 * u_mouse.xy - u_resolution.xy) / u_resolution.y;",
+      "solution": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 pan = (2.0 * u_mouse.xy - u_resolution.xy) / u_resolution.y;\n  float zoom = 1.5;\n  vec2 uv = getTransformedUV(fragCoord, u_resolution, pan, zoom);\n  vec3 col = vec3(step(0.0, sin(uv.x * 20.0)) * step(0.0, sin(uv.y * 20.0)));\n  fragColor = vec4(col * vec3(0.4, 0.8, 1.0), 1.0);\n}"
+    },
+    "markdownDoc": "# Pan & Zoom Remapped UV\n\n$$\\mathbf{p}' = \\frac{\\mathbf{p} - \\mathbf{t}}{s}$$"
+  },
+  {
+    "id": "rotate-2d",
+    "section": "2. Geometric Transformations & Linear Algebra",
+    "name": "2D Rotation Matrix",
+    "description": "Orthogonal 2D rotation matrix preserving Euclidean distance.",
+    "orderIndex": 4,
+    "difficulty": "Intermediate",
+    "glsl": "mat2 rotate2D(in float angle) {\n  float c = cos(angle);\n  float s = sin(angle);\n  return mat2(c, -s, s, c);\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  uv = rotate2D(u_time) * uv;\n  vec3 col = vec3(step(0.3, abs(uv.x)), step(0.3, abs(uv.y)), 0.6);\n  fragColor = vec4(col, 1.0);\n}",
+    "challenge": {
+      "prompt": "Apply a counter-rotating inner cross inside the outer rotating pattern by rotating uv with -u_time * 2.0.",
+      "hint": "vec2 uv2 = rotate2D(-u_time * 2.0) * uv; and combine using min() or addition.",
+      "solution": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  vec2 uv1 = rotate2D(u_time) * uv;\n  vec2 uv2 = rotate2D(-u_time * 2.0) * uv;\n  float c1 = step(0.2, abs(uv1.x)) * step(0.2, abs(uv1.y));\n  float c2 = step(0.1, abs(uv2.x)) * step(0.1, abs(uv2.y));\n  fragColor = vec4(vec3(c1, c2, 0.8), 1.0);\n}"
+    },
+    "markdownDoc": "# 2D Orthogonal Rotation Matrix\n\n$$\\mathbf{R}(\\theta) = \\begin{bmatrix} \\cos\\theta & -\\sin\\theta \\\\ \\sin\\theta & \\cos\\theta \\end{bmatrix}$$"
+  },
+  {
+    "id": "skew-2d",
+    "section": "2. Geometric Transformations & Linear Algebra",
+    "name": "2D Shear / Skew",
+    "description": "Deforms coordinates by skewing axes by tangent angle amounts.",
+    "orderIndex": 5,
+    "difficulty": "Intermediate",
+    "glsl": "vec2 skew2D(in vec2 p, in vec2 skewAmount) {\n  return vec2(\n    p.x + p.y * tan(skewAmount.x),\n    p.y + p.x * tan(skewAmount.y)\n  );\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  vec2 s = vec2(sin(u_time) * 0.5, cos(u_time * 0.7) * 0.3);\n  uv = skew2D(uv, s);\n  float d = length(max(abs(uv) - vec2(0.4), 0.0));\n  fragColor = vec4(vec3(smoothstep(0.02, 0.0, d)), 1.0);\n}",
+    "challenge": {
+      "prompt": "Combine skew2D with a periodic grid using sin(uv * 10.0) to observe isometric perspective skewing.",
+      "hint": "Replace the box distance with sin(uv.x * 10.0) * sin(uv.y * 10.0).",
+      "solution": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  uv = skew2D(uv, vec2(0.5, 0.2));\n  float pattern = step(0.0, sin(uv.x * 12.0) * sin(uv.y * 12.0));\n  fragColor = vec4(vec3(pattern), 1.0);\n}"
+    },
+    "markdownDoc": "# 2D Shear & Skew Deformation\n\n$$\\mathbf{S} = \\begin{bmatrix} 1 & \\tan\\phi_x \\\\ \\tan\\phi_y & 1 \\end{bmatrix}$$"
+  },
+  {
+    "id": "polar-conformal",
+    "section": "2. Geometric Transformations & Linear Algebra",
+    "name": "Polar & Log-Spherical Map",
+    "description": "Cartesian to polar conversion and complex logarithmic spiral conformal mapping.",
+    "orderIndex": 6,
+    "difficulty": "Intermediate",
+    "glsl": "vec2 toPolar(in vec2 p) {\n  return vec2(length(p), atan(p.y, p.x));\n}\nvec2 toCartesian(in vec2 polar) {\n  return vec2(polar.x * cos(polar.y), polar.x * sin(polar.y));\n}\nvec2 complexLogMap(in vec2 p) {\n  return vec2(log(length(p)), atan(p.y, p.x));\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  vec2 logMap = complexLogMap(uv);\n  float stripes = sin(10.0 * logMap.x + 5.0 * logMap.y - u_time * 3.0);\n  fragColor = vec4(vec3(0.5 + 0.5 * stripes), 1.0);\n}",
+    "challenge": {
+      "prompt": "Create an infinite spiral tunnel by animating logMap.x forward with u_time.",
+      "hint": "float stripes = sin(8.0 * logMap.y - 12.0 * (logMap.x - u_time * 2.0));",
+      "solution": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  vec2 logMap = complexLogMap(uv);\n  float tunnel = sin(8.0 * logMap.y + 16.0 * logMap.x - u_time * 5.0);\n  fragColor = vec4(vec3(0.5 + 0.5 * tunnel) * vec3(0.2, 0.6, 1.0), 1.0);\n}"
+    },
+    "markdownDoc": "# Polar & Log-Spherical Conformal Mapping\n\n$$w = \\ln(z) = \\ln(r) + i\\theta$$"
+  },
+  {
+    "id": "swirl-vortex",
+    "section": "2. Geometric Transformations & Linear Algebra",
+    "name": "Swirl Vortex Deformation",
+    "description": "Non-linear spatial twist deformation falling off quadratically with radius.",
+    "orderIndex": 7,
+    "difficulty": "Intermediate",
+    "glsl": "mat2 rotate2D(in float angle) {\n  float c = cos(angle); float s = sin(angle);\n  return mat2(c, -s, s, c);\n}\nvec2 swirl(in vec2 p, in float strength, in float radius) {\n  float dist = length(p);\n  if (dist < radius) {\n    float percent = (radius - dist) / radius;\n    float theta = percent * percent * strength;\n    return rotate2D(theta) * p;\n  }\n  return p;\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  uv = swirl(uv, sin(u_time * 2.0) * 8.0, 1.0);\n  float grid = step(0.1, abs(fract(uv.x * 5.0) - 0.5)) * step(0.1, abs(fract(uv.y * 5.0) - 0.5));\n  fragColor = vec4(vec3(grid) * vec3(0.9, 0.4, 0.2), 1.0);\n}",
+    "challenge": {
+      "prompt": "Increase swirl radius to 1.5 and animate the swirl strength continuously to create an interactive black hole distortion.",
+      "hint": "uv = swirl(uv, u_time * 4.0, 1.5);",
+      "solution": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  uv = swirl(uv, u_time * 3.0, 1.5);\n  float grid = step(0.05, abs(fract(uv.x * 6.0) - 0.5)) * step(0.05, abs(fract(uv.y * 6.0) - 0.5));\n  fragColor = vec4(vec3(grid) * vec3(0.3, 0.8, 0.9), 1.0);\n}"
+    },
+    "markdownDoc": "# Swirl Vortex Deformation\n\n$$\\theta(r) = \\left( \\frac{R - r}{R} \\right)^2 \\cdot k$$"
+  },
+  {
+    "id": "smoothstep-hermite",
+    "section": "3. Shaping Functions & Analytic Curves",
+    "name": "Hermite Smoothstep",
+    "description": "Cubic Hermite interpolation curve clamped to [0.0, 1.0].",
+    "orderIndex": 8,
+    "difficulty": "Intermediate",
+    "glsl": "float smoothStepHermite(in float edge0, in float edge1, in float x) {\n  float t = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);\n  return t * t * (3.0 - 2.0 * t);\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy;\n  float y = smoothStepHermite(0.2, 0.8, uv.x);\n  float d = abs(uv.y - y);\n  vec3 col = vec3(smoothstep(0.015, 0.0, d));\n  fragColor = vec4(col, 1.0);\n}",
+    "challenge": {
+      "prompt": "Construct a symmetric bell curve by multiplying smoothStepHermite(0.0, 0.5, x) with 1.0 - smoothStepHermite(0.5, 1.0, x).",
+      "hint": "float bell = smoothStepHermite(0.1, 0.5, uv.x) * (1.0 - smoothStepHermite(0.5, 0.9, uv.x));",
+      "solution": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy;\n  float y = smoothStepHermite(0.1, 0.5, uv.x) * (1.0 - smoothStepHermite(0.5, 0.9, uv.x)) * 2.0;\n  float d = abs(uv.y - y);\n  vec3 col = vec3(smoothstep(0.015, 0.0, d)) * vec3(0.3, 0.9, 0.4);\n  fragColor = vec4(col, 1.0);\n}"
+    },
+    "markdownDoc": "# Cubic Hermite Smoothstep\n\n$$S_1(t) = 3t^2 - 2t^3$$"
+  },
+  {
+    "id": "perlin-smootherstep",
+    "section": "3. Shaping Functions & Analytic Curves",
+    "name": "Perlin's Quintic Smootherstep",
+    "description": "Ken Perlin quintic S-curve with zero 1st and 2nd derivatives at endpoints.",
+    "orderIndex": 9,
+    "difficulty": "Intermediate",
+    "glsl": "float smootherstep(in float edge0, in float edge1, in float x) {\n  float t = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);\n  return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy;\n  float y = smootherstep(0.1, 0.9, uv.x);\n  float d = abs(uv.y - y);\n  vec3 col = vec3(smoothstep(0.015, 0.0, d)) * vec3(0.3, 0.8, 1.0);\n  fragColor = vec4(col, 1.0);\n}",
+    "challenge": {
+      "prompt": "Plot the difference between cubic smoothstep and quintic smootherstep across the unit interval to visualize derivative smoothness.",
+      "hint": "float diff = abs(smootherstep(0.0, 1.0, uv.x) - smoothstep(0.0, 1.0, uv.x));",
+      "solution": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy;\n  float y1 = smootherstep(0.1, 0.9, uv.x);\n  float y2 = smoothstep(0.1, 0.9, uv.x);\n  float d1 = abs(uv.y - y1);\n  float d2 = abs(uv.y - y2);\n  vec3 col = vec3(smoothstep(0.01, 0.0, d1)) * vec3(0.2, 0.6, 1.0) +\n             vec3(smoothstep(0.01, 0.0, d2)) * vec3(1.0, 0.3, 0.5);\n  fragColor = vec4(col, 1.0);\n}"
+    },
+    "markdownDoc": "# Ken Perlin's Quintic Smootherstep\n\n$$S_2(t) = 6t^5 - 15t^4 + 10t^3$$"
+  },
+  {
+    "id": "schlick-bias-gain",
+    "section": "3. Shaping Functions & Analytic Curves",
+    "name": "Schlick Bias & Gain",
+    "description": "Parametric contrast and bias controls for normalizing curve distributions.",
+    "orderIndex": 10,
+    "difficulty": "Intermediate",
+    "glsl": "float bias(in float b, in float x) {\n  return x / ((1.0 / b - 2.0) * (1.0 - x) + 1.0);\n}\nfloat gain(in float g, in float x) {\n  if (x < 0.5) return bias(1.0 - g, 2.0 * x) * 0.5;\n  return 1.0 - bias(1.0 - g, 2.0 - 2.0 * x) * 0.5;\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy;\n  float g = 0.5 + 0.45 * sin(u_time * 2.0);\n  float y = gain(g, uv.x);\n  float d = abs(uv.y - y);\n  vec3 col = vec3(smoothstep(0.015, 0.0, d)) * vec3(1.0, 0.4, 0.7);\n  fragColor = vec4(col, 1.0);\n}",
+    "challenge": {
+      "prompt": "Use gain() on a grayscale gradient to dynamically compress or expand high dynamic range contrast.",
+      "hint": "float contrast = gain(0.8, uv.x); output vec4(vec3(contrast), 1.0);",
+      "solution": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy;\n  float g = 0.5 + 0.45 * sin(u_time);\n  float col = gain(g, uv.x);\n  fragColor = vec4(vec3(col), 1.0);\n}"
+    },
+    "markdownDoc": "# Schlick Rational Bias & Gain\n\n$$\\text{bias}_b(t) = \\frac{t}{\\left(\\frac{1}{b} - 2\\right)(1 - t) + 1}$$"
+  },
+  {
+    "id": "analytic-impulses",
+    "section": "3. Shaping Functions & Analytic Curves",
+    "name": "Impulses & Attenuation Curves",
+    "description": "Inigo Quilez impulse curves and symmetric parabola generators.",
+    "orderIndex": 11,
+    "difficulty": "Intermediate",
+    "glsl": "float impulse(in float k, in float x) {\n  float h = k * x;\n  return h * exp(1.0 - h);\n}\nfloat parabola(in float x, in float k) {\n  return pow(4.0 * x * (1.0 - x), k);\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy;\n  float y1 = impulse(6.0, uv.x);\n  float y2 = parabola(uv.x, 2.0);\n  float d1 = abs(uv.y - y1 * 0.5);\n  float d2 = abs(uv.y - y2 * 0.5);\n  vec3 col = vec3(smoothstep(0.015, 0.0, d1)) * vec3(0.2, 1.0, 0.4) +\n             vec3(smoothstep(0.015, 0.0, d2)) * vec3(1.0, 0.8, 0.2);\n  fragColor = vec4(col, 1.0);\n}",
+    "challenge": {
+      "prompt": "Animate parameter k of impulse(k, x) from 2.0 to 12.0 using sin(u_time) to observe asymmetric attack peak translation.",
+      "hint": "float k = 7.0 + 5.0 * sin(u_time * 2.0); float y = impulse(k, uv.x);",
+      "solution": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy;\n  float k = 7.0 + 5.0 * sin(u_time * 2.0);\n  float y = impulse(k, uv.x);\n  float d = abs(uv.y - y);\n  vec3 col = vec3(smoothstep(0.015, 0.0, d)) * vec3(1.0, 0.6, 0.2);\n  fragColor = vec4(col, 1.0);\n}"
+    },
+    "markdownDoc": "# Inigo Quilez Impulse Curve\n\n$$f(x) = k x e^{1 - k x}$$"
+  },
+  {
+    "id": "sd-circle",
+    "section": "6. 2D Signed Distance Fields & Operators",
+    "name": "Circle SDF",
+    "description": "Exact Euclidean signed distance field to a circle boundary.",
+    "orderIndex": 12,
+    "difficulty": "Intermediate",
+    "glsl": "float sdCircle(in vec2 p, in float r) {\n  return length(p) - r;\n}\nfloat renderSDF(in float d) {\n  float antiAliasUnits = fwidth(d);\n  return 1.0 - smoothstep(-antiAliasUnits, antiAliasUnits, d);\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  float d = sdCircle(uv, 0.5);\n  float mask = renderSDF(d);\n  fragColor = vec4(vec3(mask), 1.0);\n}",
+    "challenge": {
+      "prompt": "Render the signed distance isolines (concentric contour rings) using sin(d * 40.0) outside and inside the circle.",
+      "hint": "float rings = sin(d * 40.0 - u_time * 5.0); vec3 col = vec3(0.5 + 0.5 * rings);",
+      "solution": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  float d = sdCircle(uv, 0.5);\n  float rings = sin(d * 50.0 - u_time * 4.0);\n  vec3 col = (d > 0.0) ? vec3(0.2, 0.6, 1.0) : vec3(1.0, 0.4, 0.2);\n  fragColor = vec4(col * (0.6 + 0.4 * rings), 1.0);\n}"
+    },
+    "markdownDoc": "# 2D Circle Signed Distance Field (SDF)\n\n$$d(\\mathbf{p}) = \\|\\mathbf{p}\\| - r$$"
+  },
+  {
+    "id": "sd-box",
+    "section": "6. 2D Signed Distance Fields & Operators",
+    "name": "Axis-Aligned Box SDF",
+    "description": "Exact exterior and interior signed distance to a box with half-bounds b.",
+    "orderIndex": 13,
+    "difficulty": "Intermediate",
+    "glsl": "float sdBox(in vec2 p, in vec2 b) {\n  vec2 d = abs(p) - b;\n  return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);\n}\nfloat renderSDF(in float d) {\n  float antiAliasUnits = fwidth(d);\n  return 1.0 - smoothstep(-antiAliasUnits, antiAliasUnits, d);\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  float d = sdBox(uv, vec2(0.6, 0.3));\n  float mask = renderSDF(d);\n  fragColor = vec4(vec3(mask) * vec3(0.3, 0.7, 1.0), 1.0);\n}",
+    "challenge": {
+      "prompt": "Add corner rounding to the box by subtracting a roundness radius r from both half-extents b and the resulting distance d.",
+      "hint": "float sdRoundedBox(vec2 p, vec2 b, float r) { return sdBox(p, b - r) - r; }",
+      "solution": "float sdBoxInternal(in vec2 p, in vec2 b) {\n  vec2 d = abs(p) - b;\n  return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);\n}\nvoid mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  float r = 0.1;\n  float d = sdBoxInternal(uv, vec2(0.6, 0.3) - r) - r;\n  float mask = 1.0 - smoothstep(-fwidth(d), fwidth(d), d);\n  fragColor = vec4(vec3(mask) * vec3(0.2, 0.8, 0.6), 1.0);\n}"
+    },
+    "markdownDoc": "# Axis-Aligned Box SDF\n\n$$d(\\mathbf{p}) = \\|\\max(|\\mathbf{p}| - \\mathbf{b}, \\mathbf{0})\\| + \\min(\\max(|p_x| - b_x, |p_y| - b_y), 0.0)$$"
+  },
+  {
+    "id": "sd-segment-triangle-ring",
+    "section": "6. 2D Signed Distance Fields & Operators",
+    "name": "Segment, Triangle & Ring SDFs",
+    "description": "Segment line distance, regular equilateral triangle, and stroke ring primitives.",
+    "orderIndex": 14,
+    "difficulty": "Intermediate",
+    "glsl": "float sdSegment(in vec2 p, in vec2 a, in vec2 b) {\n  vec2 pa = p - a; vec2 ba = b - a;\n  float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);\n  return length(pa - ba * h);\n}\nfloat sdEquilateralTriangle(in vec2 p, in float r) {\n  const float k = sqrt(3.0);\n  p.x = abs(p.x) - r;\n  p.y = p.y + r / k;\n  if (p.x + k * p.y > 0.0) p = vec2(p.x - k * p.y, -k * p.x - p.y) / 2.0;\n  p.x -= clamp(p.x, -2.0 * r, 0.0);\n  return -length(p) * sign(p.y);\n}\nfloat sdRing(in vec2 p, in float r, in float strokeWidth) {\n  return abs(length(p) - r) - strokeWidth * 0.5;\n}\nfloat renderSDF(in float d) {\n  float antiAliasUnits = fwidth(d);\n  return 1.0 - smoothstep(-antiAliasUnits, antiAliasUnits, d);\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  float d1 = sdEquilateralTriangle(uv - vec2(-0.5, 0.0), 0.35);\n  float d2 = sdRing(uv - vec2(0.5, 0.0), 0.3, 0.08);\n  float d = min(d1, d2);\n  float mask = renderSDF(d);\n  fragColor = vec4(vec3(mask) * vec3(1.0, 0.6, 0.2), 1.0);\n}",
+    "challenge": {
+      "prompt": "Animate the segment endpoint b in a circular path using sin(u_time) and cos(u_time) to draw a rotating laser hand.",
+      "hint": "vec2 b = vec2(cos(u_time), sin(u_time)) * 0.6;",
+      "solution": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  vec2 b = vec2(cos(u_time * 2.0), sin(u_time * 2.0)) * 0.6;\n  float d = sdSegment(uv, vec2(0.0), b) - 0.02;\n  float mask = renderSDF(d);\n  fragColor = vec4(vec3(mask) * vec3(0.1, 1.0, 0.5), 1.0);\n}"
+    },
+    "markdownDoc": "# Segment, Triangle & Ring SDFs"
+  },
+  {
+    "id": "csg-boolean-smooth-ops",
+    "section": "6. 2D Signed Distance Fields & Operators",
+    "name": "Constructive Solid Geometry (CSG) & Smooth Blends",
+    "description": "Exact union, intersection, subtraction, and polynomial smooth blending operators.",
+    "orderIndex": 15,
+    "difficulty": "Intermediate",
+    "glsl": "float opUnion(in float d1, in float d2) { return min(d1, d2); }\nfloat opIntersection(in float d1, in float d2) { return max(d1, d2); }\nfloat opSubtraction(in float d1, in float d2) { return max(-d1, d2); }\nfloat opSmoothUnion(in float d1, in float d2, in float k) {\n  float h = clamp(0.5 + 0.5 * (d2 - d1) / k, 0.0, 1.0);\n  return mix(d2, d1, h) - k * h * (1.0 - h);\n}\nfloat opSmoothSubtraction(in float d1, in float d2, in float k) {\n  float h = clamp(0.5 - 0.5 * (d2 + d1) / k, 0.0, 1.0);\n  return mix(d2, -d1, h) + k * h * (1.0 - h);\n}\nfloat renderSDF(in float d) {\n  float antiAliasUnits = fwidth(d);\n  return 1.0 - smoothstep(-antiAliasUnits, antiAliasUnits, d);\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  float c1 = length(uv - vec2(-0.25 + 0.2 * sin(u_time), 0.0)) - 0.35;\n  float c2 = length(uv - vec2(0.25 - 0.2 * sin(u_time), 0.0)) - 0.35;\n  float d = opSmoothUnion(c1, c2, 0.25);\n  float mask = renderSDF(d);\n  fragColor = vec4(vec3(mask) * vec3(0.8, 0.2, 0.9), 1.0);\n}",
+    "challenge": {
+      "prompt": "Use opSmoothSubtraction to create a metaball organic bite being eaten out of the primary circle.",
+      "hint": "float d = opSmoothSubtraction(c1, c2, 0.15);",
+      "solution": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  float c1 = length(uv - vec2(0.3 * sin(u_time), 0.0)) - 0.25;\n  float c2 = length(uv) - 0.45;\n  float d = opSmoothSubtraction(c1, c2, 0.1);\n  float mask = renderSDF(d);\n  fragColor = vec4(vec3(mask) * vec3(1.0, 0.4, 0.3), 1.0);\n}"
+    },
+    "markdownDoc": "# CSG & Smooth Polynomial Blending\n\n$$h = \\text{clamp}\\left( 0.5 + 0.5 \\frac{d_2 - d_1}{k}, 0, 1 \\right)$$\n$$\\text{smin}(d_1, d_2, k) = \\text{mix}(d_2, d_1, h) - k h (1 - h)$$"
+  },
+  {
+    "id": "domain-repetition",
+    "section": "7. Procedural Tiling, Lattices & Symmetry",
+    "name": "Domain Repetition (Infinite & Clamped)",
+    "description": "Periodic domain modulus repetition and finite clamped lattice boundaries.",
+    "orderIndex": 16,
+    "difficulty": "Advanced",
+    "glsl": "vec2 opRepetition(in vec2 p, in vec2 c) {\n  return mod(p + 0.5 * c, c) - 0.5 * c;\n}\nvec2 opRepetitionLimited(in vec2 p, in float c, in vec2 limit) {\n  return p - c * clamp(round(p / c), -limit, limit);\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y * 3.0;\n  vec2 p = opRepetition(uv, vec2(1.0));\n  float d = length(p) - 0.3;\n  float mask = 1.0 - smoothstep(0.0, 0.05, abs(d));\n  fragColor = vec4(vec3(mask) * vec3(0.2, 0.9, 0.6), 1.0);\n}",
+    "challenge": {
+      "prompt": "Use opRepetitionLimited with limit vec2(2.0, 1.0) so the repeating pattern stops outside a 5x3 finite matrix.",
+      "hint": "vec2 p = opRepetitionLimited(uv, 1.0, vec2(2.0, 1.0));",
+      "solution": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y * 4.0;\n  vec2 p = opRepetitionLimited(uv, 1.0, vec2(2.0, 1.0));\n  float d = length(p) - 0.35;\n  float mask = 1.0 - smoothstep(0.0, 0.02, d);\n  fragColor = vec4(vec3(mask) * vec3(0.9, 0.5, 0.2), 1.0);\n}"
+    },
+    "markdownDoc": "# Domain Repetition & Periodic Lattices\n\n$$\\mathbf{p}' = \\text{mod}(\\mathbf{p} + 0.5\\mathbf{c}, \\mathbf{c}) - 0.5\\mathbf{c}$$"
+  },
+  {
+    "id": "hexagonal-grid-tiling",
+    "section": "7. Procedural Tiling, Lattices & Symmetry",
+    "name": "Hexagonal Grid Tiling",
+    "description": "Decomposes 2D space into discrete hexagonal cell indices and centered local coordinates.",
+    "orderIndex": 17,
+    "difficulty": "Advanced",
+    "glsl": "struct HexGrid {\n  vec2 id;\n  vec2 uv;\n};\nHexGrid getHexGrid(in vec2 p) {\n  vec2 r = vec2(1.0, 1.7320508);\n  vec2 h = r * 0.5;\n  vec2 a = mod(p, r) - h;\n  vec2 b = mod(p - h, r) - h;\n  vec2 gv = dot(a, a) < dot(b, b) ? a : b;\n  vec2 id = p - gv;\n  return HexGrid(id, gv);\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y * 4.0;\n  HexGrid hg = getHexGrid(uv + u_time * 0.2);\n  float d = length(hg.uv);\n  float edge = smoothstep(0.48, 0.5, d);\n  vec3 col = mix(vec3(0.1, 0.15, 0.25), vec3(0.9, 0.6, 0.1), edge);\n  fragColor = vec4(col, 1.0);\n}",
+    "challenge": {
+      "prompt": "Color each hexagon uniquely using sin(dot(hg.id, vec2(12.3, 45.6))) to generate a cellular mosaic.",
+      "hint": "vec3 hexColor = 0.5 + 0.5 * cos(vec3(0.0, 1.0, 2.0) + sin(dot(hg.id, vec2(7.1, 13.9))));",
+      "solution": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y * 5.0;\n  HexGrid hg = getHexGrid(uv);\n  vec3 hexColor = 0.5 + 0.5 * cos(vec3(0.0, 1.0, 2.0) + dot(hg.id, vec2(3.14, 1.57)));\n  float d = length(hg.uv);\n  float border = smoothstep(0.45, 0.5, d);\n  fragColor = vec4(mix(hexColor, vec3(0.0), border), 1.0);\n}"
+    },
+    "markdownDoc": "# Hexagonal Grid Tiling & Lattice Decomposition\n\n$$\\mathbf{r} = (1.0, \\sqrt{3}) \\approx (1.0, 1.73205)$$"
+  },
+  {
+    "id": "truchet-labyrinth",
+    "section": "7. Procedural Tiling, Lattices & Symmetry",
+    "name": "Truchet Labyrinth Tiling",
+    "description": "Multi-arc labyrinth procedural tiling with random diagonal lattice flipping.",
+    "orderIndex": 18,
+    "difficulty": "Advanced",
+    "glsl": "float hash21(in vec2 p) {\n  vec3 p3 = fract(vec3(p.xyx) * 0.1031);\n  p3 += dot(p3, p3.yzx + 33.33);\n  return fract((p3.x + p3.y) * p3.z);\n}\nvec2 truchetTile(in vec2 p) {\n  vec2 id = floor(p);\n  vec2 f = fract(p);\n  if (hash21(id) > 0.5) {\n    f.x = 1.0 - f.x;\n  }\n  float d1 = length(f) - 0.5;\n  float d2 = length(f - vec2(1.0)) - 0.5;\n  return vec2(d1, d2);\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y * 5.0 + u_time * 0.5;\n  vec2 d = truchetTile(uv);\n  float dist = min(abs(d.x), abs(d.y));\n  float line = smoothstep(0.08, 0.02, dist);\n  fragColor = vec4(vec3(line) * vec3(0.2, 0.7, 1.0), 1.0);\n}",
+    "challenge": {
+      "prompt": "Add animated glowing pulses traversing through the Truchet tracks using sin(min(abs(d.x), abs(d.y)) * 20.0 - u_time * 6.0).",
+      "hint": "Combine line mask with glowing pulse scalar.",
+      "solution": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y * 5.0;\n  vec2 d = truchetTile(uv);\n  float dist = min(abs(d.x), abs(d.y));\n  float line = smoothstep(0.06, 0.02, dist);\n  float glow = exp(-dist * 15.0);\n  fragColor = vec4(vec3(line + glow * 0.5) * vec3(0.3, 0.8, 1.0), 1.0);\n}"
+    },
+    "markdownDoc": "# Truchet Labyrinth Tiling"
+  },
+  {
+    "id": "dimensionless-hashes",
+    "section": "4. Procedural Coherent Noise & Field Generators",
+    "name": "Dimensionless PRNG Hashes",
+    "description": "Textureless, deterministic 1D, 2D, and gradient vector hashes without sinusoidal artifacts.",
+    "orderIndex": 19,
+    "difficulty": "Advanced",
+    "glsl": "float hash11(in float p) {\n  p = fract(p * 0.1031);\n  p *= p + 33.33;\n  p *= p + p;\n  return fract(p);\n}\nfloat hash21(in vec2 p) {\n  vec3 p3 = fract(vec3(p.xyx) * 0.1031);\n  p3 += dot(p3, p3.yzx + 33.33);\n  return fract((p3.x + p3.y) * p3.z);\n}\nvec2 hash22(in vec2 p) {\n  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));\n  p3 += dot(p3, p3.yzx + 33.33);\n  return fract((p3.xx + p3.yz) * p3.zy);\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy * 20.0;\n  float h = hash21(floor(uv) + floor(u_time * 2.0));\n  fragColor = vec4(vec3(h), 1.0);\n}",
+    "challenge": {
+      "prompt": "Use hash22 to generate random star point offsets inside a tiled grid.",
+      "hint": "vec2 o = hash22(floor(uv)); float star = smoothstep(0.05, 0.0, length(fract(uv) - o));",
+      "solution": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy * 15.0;\n  vec2 id = floor(uv);\n  vec2 f = fract(uv);\n  vec2 offset = hash22(id);\n  float star = smoothstep(0.08, 0.0, length(f - offset));\n  fragColor = vec4(vec3(star), 1.0);\n}"
+    },
+    "markdownDoc": "# Dimensionless PRNG Hashes\n\n$$h(p) = \\text{frac}\\left( p \\cdot (p + C_1) \\right)$$"
+  },
+  {
+    "id": "value-noise",
+    "section": "4. Procedural Coherent Noise & Field Generators",
+    "name": "Bilinear Value Noise",
+    "description": "Lattice value noise interpolated via Ken Perlin quintic polynomial.",
+    "orderIndex": 20,
+    "difficulty": "Advanced",
+    "glsl": "float hash21(in vec2 p) {\n  vec3 p3 = fract(vec3(p.xyx) * 0.1031);\n  p3 += dot(p3, p3.yzx + 33.33);\n  return fract((p3.x + p3.y) * p3.z);\n}\nfloat valueNoise(in vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);\n  float a = hash21(i + vec2(0.0, 0.0));\n  float b = hash21(i + vec2(1.0, 0.0));\n  float c = hash21(i + vec2(0.0, 1.0));\n  float d = hash21(i + vec2(1.0, 1.0));\n  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy * 6.0;\n  float n = valueNoise(uv + u_time * 0.5);\n  fragColor = vec4(vec3(n), 1.0);\n}",
+    "challenge": {
+      "prompt": "Layer two frequencies of value noise: one low frequency at 4.0 and one high frequency at 16.0 with half amplitude.",
+      "hint": "float n = valueNoise(uv * 4.0) * 0.7 + valueNoise(uv * 16.0) * 0.3;",
+      "solution": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy;\n  float n = valueNoise(uv * 4.0 + u_time * 0.2) * 0.7 + valueNoise(uv * 16.0 - u_time * 0.4) * 0.3;\n  fragColor = vec4(vec3(n), 1.0);\n}"
+    },
+    "markdownDoc": "# 2D Bilinear Value Noise"
+  },
+  {
+    "id": "perlin-noise",
+    "section": "4. Procedural Coherent Noise & Field Generators",
+    "name": "Classic 2D Gradient Noise (Perlin)",
+    "description": "Gradient dot-product noise computed on lattice points for isotropic texture generation.",
+    "orderIndex": 21,
+    "difficulty": "Advanced",
+    "glsl": "float hash21(in vec2 p) {\n  vec3 p3 = fract(vec3(p.xyx) * 0.1031);\n  p3 += dot(p3, p3.yzx + 33.33);\n  return fract((p3.x + p3.y) * p3.z);\n}\nvec2 getGradient(in vec2 i) {\n  float a = hash21(i) * 6.28318530718;\n  return vec2(cos(a), sin(a));\n}\nfloat perlinNoise(in vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);\n  vec2 g00 = getGradient(i + vec2(0.0, 0.0));\n  vec2 g10 = getGradient(i + vec2(1.0, 0.0));\n  vec2 g01 = getGradient(i + vec2(0.0, 1.0));\n  vec2 g11 = getGradient(i + vec2(1.0, 1.0));\n  float d00 = dot(g00, f - vec2(0.0, 0.0));\n  float d10 = dot(g10, f - vec2(1.0, 0.0));\n  float d01 = dot(g01, f - vec2(0.0, 1.0));\n  float d11 = dot(g11, f - vec2(1.0, 1.0));\n  return mix(mix(d00, d10, u.x), mix(d01, d11, u.x), u.y) + 0.5;\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy * 6.0;\n  float p = perlinNoise(uv + u_time * 0.4);\n  fragColor = vec4(vec3(p), 1.0);\n}",
+    "challenge": {
+      "prompt": "Turn perlin noise into marble veins using abs(sin(uv.x * 10.0 + perlinNoise(uv * 4.0) * 6.0)).",
+      "hint": "float marble = abs(sin(uv.x * 8.0 + p * 6.0));",
+      "solution": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy;\n  float p = perlinNoise(uv * 6.0);\n  float marble = abs(sin(uv.x * 10.0 + p * 8.0));\n  fragColor = vec4(vec3(marble), 1.0);\n}"
+    },
+    "markdownDoc": "# Classic 2D Gradient Noise (Ken Perlin)"
+  },
+  {
+    "id": "simplex-noise",
+    "section": "4. Procedural Coherent Noise & Field Generators",
+    "name": "2D Simplex Noise",
+    "description": "Evaluated on a skewed triangular grid to eliminate directional axis bias and artifacts.",
+    "orderIndex": 22,
+    "difficulty": "Advanced",
+    "glsl": "vec3 permute(in vec3 x) {\n  return mod(((x * 34.0) + 1.0) * x, 289.0);\n}\nfloat simplexNoise(in vec2 v) {\n  const vec4 C = vec4(\n    0.211324865405187,\n    0.366025403784439,\n    -0.577350269189626,\n    0.024390243902439\n  );\n  vec2 i = floor(v + dot(v, C.yy));\n  vec2 x0 = v - i + dot(i, C.xx);\n  vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);\n  vec4 x12 = x0.xyxy + C.xxzz;\n  x12.xy -= i1;\n  i = mod(i, 289.0);\n  vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));\n  vec3 m = max(0.5 - vec3(dot(x0, x0), dot(x12.xy, x12.xy), dot(x12.zw, x12.zw)), 0.0);\n  m = m * m;\n  m = m * m;\n  vec3 x = 2.0 * fract(p * C.www) - 1.0;\n  vec3 h = abs(x) - 0.5;\n  vec3 ox = floor(x + 0.5);\n  vec3 a0 = x - ox;\n  m *= 1.79284291400159 - 0.85373472095314 * (a0 * a0 + h * h);\n  vec3 g;\n  g.x = a0.x * x0.x + h.x * x0.y;\n  g.yz = a0.yz * x12.xz + h.yz * x12.yw;\n  return 130.0 * dot(m, g) * 0.5 + 0.5;\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy * 5.0;\n  float s = simplexNoise(uv + u_time * 0.3);\n  fragColor = vec4(vec3(s), 1.0);\n}",
+    "challenge": {
+      "prompt": "Animate a dynamic organic water caustics effect by evaluating two counter-drifting simplex noise fields.",
+      "hint": "float caustics = pow(simplexNoise(uv + t) * simplexNoise(uv - t), 2.0);",
+      "solution": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy * 6.0;\n  float s1 = simplexNoise(uv + u_time * 0.3);\n  float s2 = simplexNoise(uv - u_time * 0.2);\n  float caustics = pow(s1 * s2 * 1.5, 3.0);\n  fragColor = vec4(vec3(caustics) * vec3(0.2, 0.7, 1.0), 1.0);\n}"
+    },
+    "markdownDoc": "# 2D Simplex Noise"
+  },
+  {
+    "id": "cellular-worley-noise",
+    "section": "4. Procedural Coherent Noise & Field Generators",
+    "name": "Cellular / Worley Noise (F1 & F2)",
+    "description": "Computes Euclidean distance to the closest (F1) and second-closest (F2) Poisson feature points.",
+    "orderIndex": 23,
+    "difficulty": "Advanced",
+    "glsl": "vec2 hash22(in vec2 p) {\n  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));\n  p3 += dot(p3, p3.yzx + 33.33);\n  return fract((p3.xx + p3.yz) * p3.zy);\n}\nvec2 cellularNoise(in vec2 p) {\n  vec2 n = floor(p);\n  vec2 f = fract(p);\n  float f1 = 8.0;\n  float f2 = 8.0;\n  for (int j = -1; j <= 1; j++) {\n    for (int i = -1; i <= 1; i++) {\n      vec2 g = vec2(float(i), float(j));\n      vec2 o = hash22(n + g);\n      vec2 delta = g + o - f;\n      float d = dot(delta, delta);\n      if (d < f1) {\n        f2 = f1;\n        f1 = d;\n      } else if (d < f2) {\n        f2 = d;\n      }\n    }\n  }\n  return vec2(sqrt(f1), sqrt(f2));\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy * 6.0;\n  vec2 f = cellularNoise(uv + u_time * 0.2);\n  float border = f.y - f.x;\n  fragColor = vec4(vec3(border), 1.0);\n}",
+    "challenge": {
+      "prompt": "Render bioluminescent stained glass cells using F1 distance for the center and F2-F1 for dark leaded borders.",
+      "hint": "float cell = 1.0 - f.x; float border = smoothstep(0.0, 0.1, f.y - f.x);",
+      "solution": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy * 5.0;\n  vec2 f = cellularNoise(uv);\n  float border = smoothstep(0.02, 0.1, f.y - f.x);\n  vec3 col = vec3(1.0 - f.x) * vec3(0.2, 0.8, 0.6) * border;\n  fragColor = vec4(col, 1.0);\n}"
+    },
+    "markdownDoc": "# Cellular / Worley Voronoi Noise"
+  },
+  {
+    "id": "rotate-axis-rodrigues",
+    "section": "2. Geometric Transformations & Linear Algebra",
+    "name": "3D Rodrigues Axis Rotation",
+    "description": "Rotates 3D space around an arbitrary unit axis vector using Rodrigues formula.",
+    "orderIndex": 24,
+    "difficulty": "Hero",
+    "glsl": "mat3 rotateAxis(in vec3 axis, in float angle) {\n  vec3 a = normalize(axis);\n  float s = sin(angle);\n  float c = cos(angle);\n  float oc = 1.0 - c;\n  return mat3(\n    oc * a.x * a.x + c,        oc * a.x * a.y - a.z * s, oc * a.z * a.x + a.y * s,\n    oc * a.x * a.y + a.z * s, oc * a.y * a.y + c,        oc * a.y * a.z - a.x * s,\n    oc * a.z * a.x - a.y * s, oc * a.y * a.z + a.x * s, oc * a.z * a.z + c\n  );\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  vec3 p = vec3(uv, 1.0);\n  p = rotateAxis(vec3(1.0, 1.0, 0.5), u_time) * p;\n  fragColor = vec4(0.5 + 0.5 * p, 1.0);\n}",
+    "challenge": {
+      "prompt": "Rotate space around the diagonal axis (1, 1, 1) and project a 3D unit cube wireframe onto the 2D screen.",
+      "hint": "Rotate vec3(uv, z) around normalize(vec3(1.0, 1.0, 1.0)).",
+      "solution": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  vec3 p = rotateAxis(vec3(1.0, 1.0, 1.0), u_time) * vec3(uv, 0.5);\n  fragColor = vec4(abs(p), 1.0);\n}"
+    },
+    "markdownDoc": "# 3D Rodrigues' Rotation Matrix\n\n$$\\mathbf{R}(\\mathbf{a}, \\theta) = \\cos\\theta \\mathbf{I} + (1 - \\cos\\theta)(\\mathbf{a} \\otimes \\mathbf{a}) + \\sin\\theta [\\mathbf{a}]_\\times$$"
+  },
+  {
+    "id": "cosine-palettes",
+    "section": "8. Color Science & Spectral Synthesis",
+    "name": "Inigo Quilez Cosine Palettes",
+    "description": "Cyclic harmonic color palettes using 4-vector cosine formulation.",
+    "orderIndex": 25,
+    "difficulty": "Advanced",
+    "glsl": "vec3 cosinePalette(in float t, in vec3 a, in vec3 b, in vec3 c, in vec3 d) {\n  const float TAU = 6.28318530718;\n  return a + b * cos(TAU * (c * t + d));\n}\nvec3 paletteTwilight(in float t) {\n  return cosinePalette(t, vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0, 0.33, 0.67));\n}\nvec3 paletteThermal(in float t) {\n  return cosinePalette(t, vec3(0.5), vec3(0.5), vec3(2.0, 1.0, 0.0), vec3(0.5, 0.20, 0.25));\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy;\n  vec3 col = (uv.y > 0.5) ? paletteTwilight(uv.x + u_time * 0.1) : paletteThermal(uv.x + u_time * 0.1);\n  fragColor = vec4(col, 1.0);\n}",
+    "challenge": {
+      "prompt": "Design a neon synthwave palette vector (pink to cyan to deep purple) using cosinePalette().",
+      "hint": "a = vec3(0.5), b = vec3(0.5), c = vec3(1.0, 1.0, 1.0), d = vec3(0.3, 0.2, 0.8)",
+      "solution": "vec3 cosinePaletteInternal(in float t, in vec3 a, in vec3 b, in vec3 c, in vec3 d) {\n  return a + b * cos(6.28318 * (c * t + d));\n}\nvoid mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy;\n  vec3 synth = cosinePaletteInternal(uv.x + u_time * 0.1, vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.3, 0.2, 0.8));\n  fragColor = vec4(synth, 1.0);\n}"
+    },
+    "markdownDoc": "# Inigo Quilez Cosine Color Palettes\n\n$$\\mathbf{C}(t) = \\mathbf{a} + \\mathbf{b} \\cos\\left( 2\\pi (\\mathbf{c} t + \\mathbf{d}) \\right)$$"
+  },
+  {
+    "id": "hsv-to-rgb",
+    "section": "8. Color Science & Spectral Synthesis",
+    "name": "HSV to Linear sRGB",
+    "description": "Branchless hue, saturation, and value color conversion.",
+    "orderIndex": 26,
+    "difficulty": "Advanced",
+    "glsl": "vec3 hsv2rgb(in vec3 c) {\n  vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);\n  vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);\n  return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy;\n  vec3 col = hsv2rgb(vec3(uv.x + u_time * 0.1, uv.y, 1.0));\n  fragColor = vec4(col, 1.0);\n}",
+    "challenge": {
+      "prompt": "Create a continuous 2D color wheel by converting Cartesian coordinates to polar angle theta, mapped to hue in hsv2rgb.",
+      "hint": "float angle = atan(p.y, p.x) / 6.28318 + 0.5; vec3 col = hsv2rgb(vec3(angle, length(p) * 2.0, 1.0));",
+      "solution": "vec3 hsv2rgbInternal(in vec3 c) {\n  vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);\n  vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);\n  return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);\n}\nvoid mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 p = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  float angle = atan(p.y, p.x) / 6.2831853 + 0.5;\n  float radius = length(p);\n  vec3 col = hsv2rgbInternal(vec3(angle, clamp(radius * 1.5, 0.0, 1.0), 1.0));\n  fragColor = vec4(col * step(radius, 0.7), 1.0);\n}"
+    },
+    "markdownDoc": "# Branchless HSV to sRGB Conversion"
+  },
+  {
+    "id": "oklab-color-space",
+    "section": "8. Color Science & Spectral Synthesis",
+    "name": "Oklab Perceptually Uniform Space",
+    "description": "Uniform lightness and chroma color mixing, eliminating muddy middle transitions and hue shifts.",
+    "orderIndex": 27,
+    "difficulty": "Advanced",
+    "glsl": "vec3 rgbToOklab(in vec3 c) {\n  float l = 0.4122214708 * c.r + 0.5363325363 * c.g + 0.0514459929 * c.b;\n  float m = 0.2119034982 * c.r + 0.6806995451 * c.g + 0.1073969566 * c.b;\n  float s = 0.0883024619 * c.r + 0.2817188376 * c.g + 0.6299787005 * c.b;\n  float l_ = pow(l, 1.0 / 3.0);\n  float m_ = pow(m, 1.0 / 3.0);\n  float s_ = pow(s, 1.0 / 3.0);\n  return vec3(\n    0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,\n    1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,\n    0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_\n  );\n}\nvec3 oklabToRgb(in vec3 c) {\n  float l_ = c.x + 0.3963377774 * c.y + 0.2158037573 * c.z;\n  float m_ = c.x - 0.1055613458 * c.y - 0.0638541728 * c.z;\n  float s_ = c.x - 0.0894841775 * c.y - 1.2914855480 * c.z;\n  float l = l_ * l_ * l_;\n  float m = m_ * m_ * m_;\n  float s = s_ * s_ * s_;\n  return vec3(\n    +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,\n    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,\n    -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s\n  );\n}\nvec3 oklabMix(in vec3 colA, in vec3 colB, in float t) {\n  vec3 labA = rgbToOklab(colA);\n  vec3 labB = rgbToOklab(colB);\n  return oklabToRgb(mix(labA, labB, t));\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy;\n  vec3 blue = vec3(0.0, 0.2, 0.9);\n  vec3 yellow = vec3(1.0, 0.9, 0.1);\n  vec3 col = (uv.y > 0.5) ? mix(blue, yellow, uv.x) : oklabMix(blue, yellow, uv.x);\n  fragColor = vec4(col, 1.0);\n}",
+    "challenge": {
+      "prompt": "Compare cyan-to-magenta mixing between naive RGB and Oklab to observe chromatic vibrancy preservation.",
+      "hint": "vec3 cyan = vec3(0.0, 1.0, 1.0); vec3 magenta = vec3(1.0, 0.0, 1.0);",
+      "solution": "vec3 oklabMixTest(in vec3 colA, in vec3 colB, in float t);\nvoid mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy;\n  vec3 cyan = vec3(0.0, 1.0, 1.0);\n  vec3 magenta = vec3(1.0, 0.0, 1.0);\n  vec3 col = (uv.y > 0.5) ? mix(cyan, magenta, uv.x) : mix(cyan, magenta, uv.x);\n  fragColor = vec4(col, 1.0);\n}"
+    },
+    "markdownDoc": "# Oklab Perceptually Uniform Color Space"
+  },
+  {
+    "id": "fbm-synthesis",
+    "section": "5. Domain Warping & Fractal Synthesis",
+    "name": "Fractal Brownian Motion (fBM)",
+    "description": "Superimposing octaves of noise with rotation, lacunarity, and persistence gain.",
+    "orderIndex": 28,
+    "difficulty": "Hero",
+    "glsl": "float hash21(in vec2 p) {\n  vec3 p3 = fract(vec3(p.xyx) * 0.1031);\n  p3 += dot(p3, p3.yzx + 33.33);\n  return fract((p3.x + p3.y) * p3.z);\n}\nfloat perlinNoise(in vec2 p) {\n  vec2 i = floor(p); vec2 f = fract(p);\n  vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);\n  float a = hash21(i); float b = hash21(i + vec2(1.0, 0.0));\n  float c = hash21(i + vec2(0.0, 1.0)); float d = hash21(i + vec2(1.0, 1.0));\n  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);\n}\nmat2 rotate2D(in float angle) {\n  float c = cos(angle); float s = sin(angle);\n  return mat2(c, -s, s, c);\n}\nfloat fbm(in vec2 p, in int octaves, in float lacunarity, in float gain) {\n  float sum = 0.0;\n  float amp = 1.0;\n  float freq = 1.0;\n  mat2 rot = rotate2D(0.5);\n  for (int i = 0; i < 8; i++) {\n    if (i >= octaves) break;\n    sum += amp * perlinNoise(p * freq);\n    p = rot * p;\n    freq *= lacunarity;\n    amp *= gain;\n  }\n  return sum;\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy * 3.0;\n  float f = fbm(uv + u_time * 0.1, 5, 2.0, 0.5);\n  fragColor = vec4(vec3(f * 0.5), 1.0);\n}",
+    "challenge": {
+      "prompt": "Tune fbm octaves from 2 to 7 based on mouse X position to understand the performance cost vs detail tradeoff of spectral summation.",
+      "hint": "int octaves = int(2.0 + 5.0 * (u_mouse.x / u_resolution.x));",
+      "solution": "float fbmTest(in vec2 p, in int octaves, in float lacunarity, in float gain);\nvoid mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy * 4.0;\n  float f = fbmTest(uv + u_time * 0.1, 6, 2.0, 0.5);\n  fragColor = vec4(vec3(f * 0.6), 1.0);\n}"
+    },
+    "markdownDoc": "# Fractal Brownian Motion (fBM)\n\n$$f_{\\text{fBM}}(\\mathbf{x}) = \\sum_{k=0}^{N-1} A^k n\\left( \\Lambda^k \\mathbf{R}^k \\mathbf{x} \\right)$$"
+  },
+  {
+    "id": "domain-warp-multiscale",
+    "section": "5. Domain Warping & Fractal Synthesis",
+    "name": "Multi-Scale Domain Warping",
+    "description": "Feeds noise fields back into their own coordinate space to simulate organic fluid motion.",
+    "orderIndex": 29,
+    "difficulty": "Hero",
+    "glsl": "float hash21(in vec2 p) {\n  vec3 p3 = fract(vec3(p.xyx) * 0.1031);\n  p3 += dot(p3, p3.yzx + 33.33);\n  return fract((p3.x + p3.y) * p3.z);\n}\nfloat perlinNoise(in vec2 p) {\n  vec2 i = floor(p); vec2 f = fract(p);\n  vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);\n  float a = hash21(i); float b = hash21(i + vec2(1.0, 0.0));\n  float c = hash21(i + vec2(0.0, 1.0)); float d = hash21(i + vec2(1.0, 1.0));\n  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);\n}\nmat2 rotate2D(in float angle) {\n  float c = cos(angle); float s = sin(angle);\n  return mat2(c, -s, s, c);\n}\nfloat fbm(in vec2 p) {\n  float sum = 0.0; float amp = 1.0; float freq = 1.0;\n  mat2 rot = rotate2D(0.5);\n  for (int i = 0; i < 5; i++) {\n    sum += amp * perlinNoise(p * freq);\n    p = rot * p; freq *= 2.0; amp *= 0.5;\n  }\n  return sum;\n}\nfloat domainWarp(in vec2 p, out vec2 q, out vec2 r, in float time) {\n  q = vec2(\n    fbm(p + vec2(0.0, 0.0) + 0.05 * time),\n    fbm(p + vec2(5.2, 1.3) + 0.07 * time)\n  );\n  r = vec2(\n    fbm(p + 4.0 * q + vec2(1.7, 9.2) + 0.15 * time),\n    fbm(p + 4.0 * q + vec2(8.3, 2.8) + 0.126 * time)\n  );\n  return fbm(p + 4.0 * r);\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y * 1.5;\n  vec2 q, r;\n  float f = domainWarp(uv, q, r, u_time);\n  vec3 col = mix(vec3(0.1, 0.2, 0.5), vec3(0.9, 0.4, 0.1), f * 0.5);\n  col = mix(col, vec3(0.2, 0.8, 0.6), dot(q, q) * 0.3);\n  fragColor = vec4(col, 1.0);\n}",
+    "challenge": {
+      "prompt": "Inject cosine color palette coloring driven by the secondary feedback vector r to create realistic atmospheric Jupiter storm clouds.",
+      "hint": "vec3 col = cosinePalette(length(r), vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0, 0.33, 0.67));",
+      "solution": "float domainWarpTest(in vec2 p, out vec2 q, out vec2 r, in float time);\nvoid mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y * 2.0;\n  vec2 q, r;\n  float f = domainWarpTest(uv, q, r, u_time);\n  vec3 col = 0.5 + 0.5 * cos(6.28318 * (vec3(1.0) * f + vec3(0.2, 0.5, 0.8)));\n  fragColor = vec4(col, 1.0);\n}"
+    },
+    "markdownDoc": "# Multi-Scale Domain Warping\n\n$$\\mathbf{p}' = \\mathbf{p} + \\alpha \\mathbf{f}_{\\text{fBM}}(\\mathbf{p} + \\beta \\mathbf{f}_{\\text{fBM}}(\\mathbf{p}))$$"
+  },
+  {
+    "id": "blinn-phong-fresnel",
+    "section": "9. Analytical Lighting, Normals & Shading",
+    "name": "Blinn-Phong & Schlick-Fresnel Illuminator",
+    "description": "Physically plausible specular Blinn-Phong lighting combined with Schlick Fresnel reflectance.",
+    "orderIndex": 30,
+    "difficulty": "Hero",
+    "glsl": "struct SurfaceMaterial {\n  vec3 baseColor;\n  float roughness;\n  float specularPower;\n  float f0;\n};\nvec3 evaluateBlinnPhong(\n  in vec3 normal,\n  in vec3 viewDir,\n  in vec3 lightDir,\n  in vec3 lightColor,\n  in SurfaceMaterial mat\n) {\n  vec3 N = normalize(normal);\n  vec3 V = normalize(viewDir);\n  vec3 L = normalize(lightDir);\n  vec3 H = normalize(L + V);\n  float NdotL = max(dot(N, L), 0.0);\n  vec3 diffuse = mat.baseColor * lightColor * NdotL;\n  float NdotH = max(dot(N, H), 0.0);\n  float specFactor = pow(NdotH, mat.specularPower);\n  float VdotH = max(dot(V, H), 0.0);\n  float fresnel = mat.f0 + (1.0 - mat.f0) * pow(1.0 - VdotH, 5.0);\n  vec3 specular = lightColor * specFactor * fresnel;\n  return diffuse + specular;\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  float r = length(uv);\n  if (r > 0.7) {\n    fragColor = vec4(0.05, 0.05, 0.08, 1.0);\n    return;\n  }\n  vec3 N = normalize(vec3(uv, sqrt(0.7 * 0.7 - r * r)));\n  vec3 V = vec3(0.0, 0.0, 1.0);\n  vec3 L = normalize(vec3(sin(u_time), cos(u_time), 1.0));\n  SurfaceMaterial mat = SurfaceMaterial(vec3(0.1, 0.5, 0.9), 0.2, 32.0, 0.04);\n  vec3 color = evaluateBlinnPhong(N, V, L, vec3(1.0), mat);\n  fragColor = vec4(color, 1.0);\n}",
+    "challenge": {
+      "prompt": "Change the dielectric material into gold metal by raising F0 to vec3(1.0, 0.78, 0.34) and tuning specular power to 128.",
+      "hint": "Update mat.f0 to 0.9 and baseColor to gold.",
+      "solution": "struct SurfaceMaterial { vec3 baseColor; float roughness; float specularPower; float f0; };\nvec3 evaluateBlinnPhong(in vec3 normal, in vec3 viewDir, in vec3 lightDir, in vec3 lightColor, in SurfaceMaterial mat);\nvoid mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  float r = length(uv);\n  if (r > 0.7) { fragColor = vec4(0.02, 0.02, 0.04, 1.0); return; }\n  vec3 N = normalize(vec3(uv, sqrt(0.49 - r * r)));\n  SurfaceMaterial gold = SurfaceMaterial(vec3(1.0, 0.76, 0.33), 0.1, 128.0, 0.9);\n  vec3 col = evaluateBlinnPhong(N, vec3(0,0,1), normalize(vec3(1,1,1)), vec3(1.0), gold);\n  fragColor = vec4(col, 1.0);\n}"
+    },
+    "markdownDoc": "# Blinn-Phong & Schlick-Fresnel Illumination Model\n\n$$\\mathbf{H} = \\frac{\\mathbf{L} + \\mathbf{V}}{\\|\\mathbf{L} + \\mathbf{V}\\|}$$\n$$F(\\mathbf{V}, \\mathbf{H}) = F_0 + (1 - F_0)(1 - \\mathbf{V} \\cdot \\mathbf{H})^5$$"
+  },
+  {
+    "id": "rim-and-subsurface",
+    "section": "9. Analytical Lighting, Normals & Shading",
+    "name": "Screen-Space Rim & Subsurface Scattering",
+    "description": "Silhouette rim lighting glow and thin subsurface scattering wrap lighting.",
+    "orderIndex": 31,
+    "difficulty": "Hero",
+    "glsl": "float calculateRim(in vec3 normal, in vec3 viewDir, in float rimPower) {\n  float f = 1.0 - max(dot(normalize(normal), normalize(viewDir)), 0.0);\n  return pow(clamp(f, 0.0, 1.0), rimPower);\n}\nfloat wrapLighting(in vec3 normal, in vec3 lightDir, in float wrap) {\n  float NdotL = dot(normalize(normal), normalize(lightDir));\n  return clamp((NdotL + wrap) / (1.0 + wrap), 0.0, 1.0);\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  float r = length(uv);\n  if (r > 0.7) {\n    fragColor = vec4(0.05, 0.05, 0.08, 1.0);\n    return;\n  }\n  vec3 N = normalize(vec3(uv, sqrt(0.7 * 0.7 - r * r)));\n  vec3 V = vec3(0.0, 0.0, 1.0);\n  vec3 L = normalize(vec3(cos(u_time * 0.8), sin(u_time * 0.8), 0.5));\n  float wrap = wrapLighting(N, L, 0.4);\n  float rim = calculateRim(N, V, 3.0);\n  vec3 col = vec3(0.1, 0.3, 0.6) * wrap + vec3(0.9, 0.5, 0.2) * rim;\n  fragColor = vec4(col, 1.0);\n}",
+    "challenge": {
+      "prompt": "Combine strong rim power (4.0) with warm jade green subsurface scattering to achieve a translucent mineral shader.",
+      "hint": "vec3 jade = vec3(0.1, 0.8, 0.5) * wrap + vec3(0.8, 1.0, 0.9) * rim;",
+      "solution": "float calculateRim(in vec3 normal, in vec3 viewDir, in float rimPower);\nfloat wrapLighting(in vec3 normal, in vec3 lightDir, in float wrap);\nvoid mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  float r = length(uv);\n  if (r > 0.7) { fragColor = vec4(0.02, 0.02, 0.04, 1.0); return; }\n  vec3 N = normalize(vec3(uv, sqrt(0.49 - r * r)));\n  vec3 V = vec3(0.0, 0.0, 1.0);\n  vec3 L = normalize(vec3(sin(u_time), cos(u_time), 0.5));\n  float wrap = wrapLighting(N, L, 0.5);\n  float rim = calculateRim(N, V, 4.0);\n  vec3 col = vec3(0.1, 0.7, 0.4) * wrap + vec3(0.8, 1.0, 0.7) * rim;\n  fragColor = vec4(col, 1.0);\n}"
+    },
+    "markdownDoc": "# Rim Glow & Subsurface Scattering (Wrap Lighting)"
+  },
+  {
+    "id": "reconstruct-normals",
+    "section": "9. Analytical Lighting, Normals & Shading",
+    "name": "Finite Difference Normal Reconstruction",
+    "description": "Reconstructs smooth surface normal vectors from any 2D procedural scalar heightfield.",
+    "orderIndex": 32,
+    "difficulty": "Hero",
+    "glsl": "float hash21(in vec2 p) {\n  vec3 p3 = fract(vec3(p.xyx) * 0.1031);\n  p3 += dot(p3, p3.yzx + 33.33);\n  return fract((p3.x + p3.y) * p3.z);\n}\nfloat perlin(in vec2 p) {\n  vec2 i = floor(p); vec2 f = fract(p);\n  vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);\n  float a = hash21(i); float b = hash21(i + vec2(1.0, 0.0));\n  float c = hash21(i + vec2(0.0, 1.0)); float d = hash21(i + vec2(1.0, 1.0));\n  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);\n}\nfloat heightMap(in vec2 p) {\n  return perlin(p * 4.0);\n}\nvec3 reconstructNormal(in vec2 p, in float eps, in float strength) {\n  float hC = heightMap(p);\n  float hR = heightMap(p + vec2(eps, 0.0));\n  float hT = heightMap(p + vec2(0.0, eps));\n  vec3 va = vec3(eps, 0.0, (hR - hC) * strength);\n  vec3 vb = vec3(0.0, eps, (hT - hC) * strength);\n  return normalize(cross(va, vb));\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy;\n  vec3 normal = reconstructNormal(uv + u_time * 0.05, 0.005, 1.5);\n  vec3 lightDir = normalize(vec3(0.5, 0.8, 1.0));\n  float diff = max(dot(normal, lightDir), 0.0);\n  fragColor = vec4(vec3(diff) * vec3(0.8, 0.6, 0.5) + 0.1, 1.0);\n}",
+    "challenge": {
+      "prompt": "Add specular reflection to the reconstructed terrain normal using pow(max(dot(reflect(-lightDir, normal), vec3(0,0,1)), 0.0), 32.0).",
+      "hint": "vec3 R = reflect(-lightDir, normal); float spec = pow(max(R.z, 0.0), 32.0);",
+      "solution": "vec3 reconstructNormal(in vec2 p, in float eps, in float strength);\nvoid mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = fragCoord.xy / u_resolution.xy;\n  vec3 N = reconstructNormal(uv + u_time * 0.05, 0.005, 2.0);\n  vec3 L = normalize(vec3(sin(u_time), cos(u_time), 1.0));\n  float diff = max(dot(N, L), 0.0);\n  vec3 R = reflect(-L, N);\n  float spec = pow(max(R.z, 0.0), 32.0);\n  fragColor = vec4(vec3(diff * 0.7 + spec * 0.5) * vec3(0.3, 0.7, 1.0), 1.0);\n}"
+    },
+    "markdownDoc": "# Finite Difference Normal Reconstruction\n\n$$\\mathbf{N} = \\frac{\\mathbf{v}_a \\times \\mathbf{v}_b}{\\|\\mathbf{v}_a \\times \\mathbf{v}_b\\|}$$"
+  },
+  {
+    "id": "pinhole-camera-raygen",
+    "section": "10. 3D Raymarching & Physical Shading (Hero)",
+    "name": "3D Pinhole Camera & LookAt Matrix",
+    "description": "Constructing virtual camera rays in world space with ray origin (ro), ray direction (rd), and an orthonormal LookAt view basis.",
+    "orderIndex": 33,
+    "difficulty": "Hero",
+    "glsl": "mat3 setCamera(in vec3 ro, in vec3 ta, in float cr) {\n  vec3 cw = normalize(ta - ro); // Forward view vector\n  vec3 cp = vec3(sin(cr), cos(cr), 0.0); // Up vector roll\n  vec3 cu = normalize(cross(cw, cp)); // Right orthogonal vector\n  vec3 cv = cross(cu, cw); // True up orthogonal vector\n  return mat3(cu, cv, cw);\n}\n\nvec3 getRayDirection(in vec2 uv, in vec3 ro, in vec3 ta, in float fov) {\n  mat3 cam = setCamera(ro, ta, 0.0);\n  return normalize(cam * vec3(uv, fov));\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  vec3 ro = vec3(2.5 * sin(u_time * 0.5), 1.5, 2.5 * cos(u_time * 0.5));\n  vec3 ta = vec3(0.0, 0.0, 0.0);\n  vec3 rd = getRayDirection(uv, ro, ta, 1.5);\n  // Visualize world ray directions mapped to color\n  fragColor = vec4(0.5 + 0.5 * rd, 1.0);\n}",
+    "challenge": {
+      "prompt": "Modify the camera roll angle cr in setCamera() to animate a Dutch angle tilt with sin(u_time).",
+      "hint": "Pass sin(u_time) * 0.5 as the cr roll parameter in setCamera().",
+      "solution": "mat3 setCameraCustom(in vec3 ro, in vec3 ta, in float cr) {\n  vec3 cw = normalize(ta - ro);\n  vec3 cp = vec3(sin(cr), cos(cr), 0.0);\n  vec3 cu = normalize(cross(cw, cp));\n  vec3 cv = cross(cu, cw);\n  return mat3(cu, cv, cw);\n}\nvoid mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  vec3 ro = vec3(0.0, 0.0, 3.0);\n  vec3 ta = vec3(0.0);\n  mat3 cam = setCameraCustom(ro, ta, sin(u_time));\n  vec3 rd = normalize(cam * vec3(uv, 1.5));\n  fragColor = vec4(0.5 + 0.5 * rd, 1.0);\n}"
+    },
+    "markdownDoc": "# 3D Pinhole Camera Model & Orthonormal LookAt Matrix\n\n## 1. Mathematical Formulation & Orthonormal Basis\nTo render a 3D scene from an arbitrary viewpoint, we construct an orthonormal camera basis from camera origin $\\mathbf{ro} \\in \\mathbb{R}^3$ and look-at target $\\mathbf{ta} \\in \\mathbb{R}^3$:\n\n1. **Forward view vector**:\n   $$\\mathbf{c}_w = \\frac{\\mathbf{ta} - \\mathbf{ro}}{\\|\\mathbf{ta} - \\mathbf{ro}\\|}$$\n2. **Right orthogonal vector**:\n   $$\\mathbf{c}_u = \\frac{\\mathbf{c}_w \\times \\mathbf{up}}{\\|\\mathbf{c}_w \\times \\mathbf{up}\\|}$$\n3. **True orthogonal up vector**:\n   $$\\mathbf{c}_v = \\mathbf{c}_u \\times \\mathbf{c}_w$$\n\nThe rotation matrix $\\mathbf{M}_{\\text{cam}} = [\\mathbf{c}_u, \\mathbf{c}_v, \\mathbf{c}_w]$ transforms normalized camera screen coordinates $(u, v, f)$ into a world-space ray direction:\n\n$$\\mathbf{rd} = \\frac{\\mathbf{M}_{\\text{cam}} \\begin{pmatrix} u \\\\ v \\\\ f \\end{pmatrix}}{\\|\\mathbf{M}_{\\text{cam}} (u, v, f)^T\\|}$$"
+  },
+  {
+    "id": "sphere-tracing-3d",
+    "section": "10. 3D Raymarching & Physical Shading (Hero)",
+    "name": "Sphere Tracing (Raymarching 3D SDF)",
+    "description": "Iterative raymarching using sphere tracing: stepping along ray direction by exact SDF distances until intersection or horizon.",
+    "orderIndex": 34,
+    "difficulty": "Hero",
+    "glsl": "float mapScene(in vec3 p) {\n  // Sphere at origin with radius 1.0 combined with ground plane\n  float sphere = length(p) - 1.0;\n  float plane = p.y + 1.0;\n  return min(sphere, plane);\n}\n\nfloat raymarch(in vec3 ro, in vec3 rd, in float maxDist) {\n  float t = 0.0;\n  for (int i = 0; i < 96; i++) {\n    vec3 p = ro + rd * t;\n    float d = mapScene(p);\n    if (d < 0.001) return t; // Hit surface\n    t += d;                  // Step forward by guaranteed safe distance\n    if (t > maxDist) break;\n  }\n  return -1.0; // Missed\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  vec3 ro = vec3(0.0, 1.0, 3.5);\n  vec3 ta = vec3(0.0, 0.0, 0.0);\n  vec3 cw = normalize(ta - ro);\n  vec3 cu = normalize(cross(cw, vec3(0,1,0)));\n  vec3 cv = cross(cu, cw);\n  vec3 rd = normalize(mat3(cu, cv, cw) * vec3(uv, 1.5));\n  \n  float t = raymarch(ro, rd, 20.0);\n  if (t > 0.0) {\n    vec3 p = ro + rd * t;\n    float depth = 1.0 - t / 15.0;\n    fragColor = vec4(vec3(depth) * vec3(0.3, 0.7, 1.0), 1.0);\n  } else {\n    fragColor = vec4(0.05, 0.05, 0.08, 1.0);\n  }\n}",
+    "challenge": {
+      "prompt": "Add an animated pulsing torus or box to mapScene() using max(abs(p) - b, 0.0).",
+      "hint": "Add a box SDF into mapScene() and combine with min().",
+      "solution": "float mapSceneCustom(in vec3 p) {\n  vec3 d = abs(p) - vec3(0.7);\n  float box = length(max(d, 0.0)) + min(max(d.x, max(d.y, d.z)), 0.0);\n  return min(box, p.y + 1.0);\n}\nfloat raymarchCustom(in vec3 ro, in vec3 rd) {\n  float t = 0.0;\n  for (int i = 0; i < 80; i++) {\n    float d = mapSceneCustom(ro + rd * t);\n    if (d < 0.001) return t;\n    t += d;\n    if (t > 20.0) break;\n  }\n  return -1.0;\n}\nvoid mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  vec3 ro = vec3(2.5 * sin(u_time), 1.5, 2.5 * cos(u_time));\n  vec3 cw = normalize(-ro);\n  vec3 cu = normalize(cross(cw, vec3(0,1,0)));\n  vec3 cv = cross(cu, cw);\n  vec3 rd = normalize(mat3(cu, cv, cw) * vec3(uv, 1.5));\n  float t = raymarchCustom(ro, rd);\n  fragColor = (t > 0.0) ? vec4(vec3(1.0 - t / 10.0) * vec3(0.2, 0.9, 0.6), 1.0) : vec4(0.02, 0.02, 0.04, 1.0);\n}"
+    },
+    "markdownDoc": "# Sphere Tracing (Raymarching 3D SDFs) (John Hart, 1996)\n\n## 1. Mathematical Theory\nTraditional raytracing solves analytical ray-object intersection equations (e.g. quadratic equations for spheres).\n**Sphere tracing** evaluates arbitrary procedural implicit surfaces $f(\\mathbf{p}) = 0$. Because $f(\\mathbf{p})$ represents the exact signed distance to the closest surface boundary, a sphere of radius $d = f(\\mathbf{p})$ centered at $\\mathbf{p}$ contains zero obstacles:\n\n$$\\mathbf{p}_{k+1} = \\mathbf{p}_k + f(\\mathbf{p}_k) \\cdot \\mathbf{rd}$$\n\nGuarantees convergence to within $\\epsilon$ ($10^{-3}$) without overstepping or clipping geometry."
+  },
+  {
+    "id": "raymarching-normals-shading",
+    "section": "10. 3D Raymarching & Physical Shading (Hero)",
+    "name": "3D SDF Surface Normal Gradient",
+    "description": "Evaluating surface normal vectors in 3D using the tetrahedral finite difference gradient of the distance field.",
+    "orderIndex": 35,
+    "difficulty": "Hero",
+    "glsl": "float mapScene(in vec3 p) {\n  return length(p) - 1.0;\n}\n\n// Tetrahedral finite difference gradient (Inigo Quilez method: 4 evaluations instead of 6)\nvec3 calcNormal(in vec3 p) {\n  const vec2 e = vec2(1.0, -1.0) * 0.0005;\n  return normalize(\n    e.xyy * mapScene(p + e.xyy) +\n    e.yyx * mapScene(p + e.yyx) +\n    e.yxy * mapScene(p + e.yxy) +\n    e.xxx * mapScene(p + e.xxx)\n  );\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  vec3 ro = vec3(0.0, 0.0, 3.0);\n  vec3 rd = normalize(vec3(uv, -1.5));\n  float t = 0.0;\n  for (int i = 0; i < 64; i++) {\n    float d = mapScene(ro + rd * t);\n    if (d < 0.001) break;\n    t += d;\n    if (t > 10.0) break;\n  }\n  if (t < 10.0) {\n    vec3 p = ro + rd * t;\n    vec3 N = calcNormal(p);\n    vec3 L = normalize(vec3(1.0, 1.0, 1.0));\n    float diff = max(dot(N, L), 0.0);\n    fragColor = vec4(vec3(diff) * vec3(0.1, 0.6, 1.0) + 0.1, 1.0);\n  } else {\n    fragColor = vec4(0.02, 0.02, 0.04, 1.0);\n  }\n}",
+    "challenge": {
+      "prompt": "Add specular Blinn-Phong highlights using the halfway vector H = normalize(L + V) with specular power 64.",
+      "hint": "vec3 V = -rd; vec3 H = normalize(L + V); float spec = pow(max(dot(N, H), 0.0), 64.0);",
+      "solution": "float mapSphere(in vec3 p) { return length(p) - 1.0; }\nvec3 calcNormalSphere(in vec3 p) {\n  const vec2 e = vec2(1.0, -1.0) * 0.0005;\n  return normalize(e.xyy * mapSphere(p + e.xyy) + e.yyx * mapSphere(p + e.yyx) + e.yxy * mapSphere(p + e.yxy) + e.xxx * mapSphere(p + e.xxx));\n}\nvoid mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  vec3 ro = vec3(0.0, 0.0, 3.0);\n  vec3 rd = normalize(vec3(uv, -1.5));\n  float t = 0.0;\n  for (int i = 0; i < 60; i++) {\n    float d = mapSphere(ro + rd * t);\n    if (d < 0.001) break;\n    t += d;\n  }\n  if (t < 5.0) {\n    vec3 p = ro + rd * t;\n    vec3 N = calcNormalSphere(p);\n    vec3 L = normalize(vec3(1.0, 1.0, 1.0));\n    vec3 V = -rd;\n    vec3 H = normalize(L + V);\n    float diff = max(dot(N, L), 0.0);\n    float spec = pow(max(dot(N, H), 0.0), 64.0);\n    fragColor = vec4(vec3(diff * 0.8 + spec * 0.6) * vec3(0.2, 0.7, 1.0), 1.0);\n  } else {\n    fragColor = vec4(0.02, 0.02, 0.04, 1.0);\n  }\n}"
+    },
+    "markdownDoc": "# 3D Surface Normal Gradient & Tetrahedral Stencil\n\n## 1. Mathematical Formulation\nThe gradient of a signed distance field $\\nabla f(\\mathbf{p})$ is strictly orthogonal to the level set surface $f(\\mathbf{p}) = 0$:\n\n$$\\mathbf{N} = \\frac{\\nabla f(\\mathbf{p})}{\\|\\nabla f(\\mathbf{p})\\|}$$\n\nUsing a regular tetrahedron vertices $(\\pm 1, \\pm 1, \\pm 1)$, only 4 scene evaluations are required instead of 6 in standard central differences, yielding a 33% speedup on GPU arithmetic units."
+  },
+  {
+    "id": "analytical-soft-shadows",
+    "section": "10. 3D Raymarching & Physical Shading (Hero)",
+    "name": "Analytical Soft Shadows & Penumbra",
+    "description": "Simulating spherical area light soft shadows and realistic penumbras by tracking ray-surface clearance along the shadow ray.",
+    "orderIndex": 36,
+    "difficulty": "Hero",
+    "glsl": "float mapScene(in vec3 p) {\n  float sphere = length(p - vec3(0.0, 0.5, 0.0)) - 0.7;\n  float plane = p.y;\n  return min(sphere, plane);\n}\n\n// Inigo Quilez penumbra soft shadow formula\nfloat calcSoftshadow(in vec3 ro, in vec3 rd, in float mint, in float maxt, in float k) {\n  float res = 1.0;\n  float t = mint;\n  for (int i = 0; i < 48; i++) {\n    float h = mapScene(ro + rd * t);\n    if (h < 0.001) return 0.0; // In shadow\n    res = min(res, k * h / t); // Track closest beam clearance\n    t += h;\n    if (t > maxt) break;\n  }\n  return clamp(res, 0.0, 1.0);\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  vec3 ro = vec3(2.0 * sin(u_time * 0.5), 1.8, 2.0 * cos(u_time * 0.5));\n  vec3 ta = vec3(0.0, 0.3, 0.0);\n  vec3 cw = normalize(ta - ro);\n  vec3 cu = normalize(cross(cw, vec3(0,1,0)));\n  vec3 cv = cross(cu, cw);\n  vec3 rd = normalize(mat3(cu, cv, cw) * vec3(uv, 1.5));\n  \n  float t = 0.0;\n  for (int i = 0; i < 64; i++) {\n    float d = mapScene(ro + rd * t);\n    if (d < 0.001) break;\n    t += d;\n    if (t > 15.0) break;\n  }\n  \n  if (t < 15.0) {\n    vec3 p = ro + rd * t;\n    const vec2 e = vec2(1.0, -1.0) * 0.0005;\n    vec3 N = normalize(e.xyy*mapScene(p+e.xyy) + e.yyx*mapScene(p+e.yyx) + e.yxy*mapScene(p+e.yxy) + e.xxx*mapScene(p+e.xxx));\n    vec3 L = normalize(vec3(1.5, 2.5, 1.0));\n    float diff = max(dot(N, L), 0.0);\n    float shadow = calcSoftshadow(p + N * 0.002, L, 0.02, 5.0, 16.0);\n    vec3 col = vec3(0.2, 0.6, 1.0) * diff * shadow + vec3(0.05, 0.08, 0.12);\n    fragColor = vec4(col, 1.0);\n  } else {\n    fragColor = vec4(0.04, 0.04, 0.06, 1.0);\n  }\n}",
+    "challenge": {
+      "prompt": "Tune hardness parameter k from 8.0 (diffuse soft shadow) to 64.0 (sharp sunlight shadow) to observe penumbra transitions.",
+      "hint": "float shadow = calcSoftshadow(p + N * 0.002, L, 0.02, 5.0, 32.0);",
+      "solution": "float mapScenePenumbra(in vec3 p) {\n  float sphere = length(p - vec3(0.0, 0.5, 0.0)) - 0.7;\n  return min(sphere, p.y);\n}\nfloat calcSoftshadowCustom(in vec3 ro, in vec3 rd, in float k) {\n  float res = 1.0; float t = 0.02;\n  for (int i = 0; i < 48; i++) {\n    float h = mapScenePenumbra(ro + rd * t);\n    if (h < 0.001) return 0.0;\n    res = min(res, k * h / t);\n    t += h;\n    if (t > 4.0) break;\n  }\n  return clamp(res, 0.0, 1.0);\n}\nvoid mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  vec3 ro = vec3(0.0, 1.5, 3.0);\n  vec3 rd = normalize(vec3(uv, -1.5));\n  float t = 0.0;\n  for (int i = 0; i < 60; i++) {\n    float d = mapScenePenumbra(ro + rd * t);\n    if (d < 0.001) break;\n    t += d;\n  }\n  if (t < 10.0) {\n    vec3 p = ro + rd * t;\n    vec3 L = normalize(vec3(1.0, 2.0, 1.0));\n    float s = calcSoftshadowCustom(p + vec3(0,0.01,0), L, 16.0);\n    fragColor = vec4(vec3(s), 1.0);\n  } else {\n    fragColor = vec4(0.02, 0.02, 0.04, 1.0);\n  }\n}"
+    },
+    "markdownDoc": "# Analytical Soft Shadows & Penumbra Raymarching\n\n## 1. Mathematical Formulation & Geometric Penumbra\nIn physical optics, an area light source of radius $R$ casts a **penumbra** (partially occluded region) and an **umbra** (completely occluded region).\nRather than tracing hundreds of distributed stochastic shadow rays, distance fields permit exact penumbra approximation by calculating the minimum beam clearance angle along a single shadow ray:\n\n$$S(\\mathbf{p}, \\mathbf{L}) = \\min_{t \\in [t_{\\min}, t_{\\max}]} \\left( \\frac{k \\cdot d(\\mathbf{p} + t\\mathbf{L})}{t} \\right)$$\n\n- $d/t$ approximates $\\sin\\theta$, the angular clearance to the occluder.\n- $k$ controls the apparent light source radius (penumbra softness)."
+  },
+  {
+    "id": "ambient-occlusion-sdf",
+    "section": "10. 3D Raymarching & Physical Shading (Hero)",
+    "name": "SDF Ambient Occlusion (AO)",
+    "description": "Approximating diffuse ambient light occlusion in creases and crevices by sampling SDF distances along the surface normal.",
+    "orderIndex": 37,
+    "difficulty": "Hero",
+    "glsl": "float mapScene(in vec3 p) {\n  float sphere = length(p - vec3(0.0, 0.6, 0.0)) - 0.6;\n  float plane = p.y;\n  return min(sphere, plane);\n}\n\n// Ambient Occlusion: samples 5 points along normal and compares expected distance\nfloat calcAO(in vec3 pos, in vec3 nor) {\n  float occ = 0.0;\n  float sca = 1.0;\n  for (int i = 0; i < 5; i++) {\n    float h = 0.01 + 0.12 * float(i) / 4.0;\n    float d = mapScene(pos + h * nor);\n    occ += (h - d) * sca;\n    sca *= 0.95;\n  }\n  return clamp(1.0 - 2.5 * occ, 0.0, 1.0);\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  vec3 ro = vec3(0.0, 1.2, 2.5);\n  vec3 rd = normalize(vec3(uv.x, uv.y - 0.2, -1.5));\n  \n  float t = 0.0;\n  for (int i = 0; i < 64; i++) {\n    float d = mapScene(ro + rd * t);\n    if (d < 0.001) break;\n    t += d;\n    if (t > 10.0) break;\n  }\n  \n  if (t < 10.0) {\n    vec3 p = ro + rd * t;\n    const vec2 e = vec2(1.0, -1.0) * 0.0005;\n    vec3 N = normalize(e.xyy*mapScene(p+e.xyy) + e.yyx*mapScene(p+e.yyx) + e.yxy*mapScene(p+e.yxy) + e.xxx*mapScene(p+e.xxx));\n    float ao = calcAO(p, N);\n    fragColor = vec4(vec3(ao) * vec3(0.9, 0.8, 0.7), 1.0);\n  } else {\n    fragColor = vec4(0.02, 0.02, 0.04, 1.0);\n  }\n}",
+    "challenge": {
+      "prompt": "Multiply ambient occlusion into both the ambient sky term and indirect diffuse term to give realism to contact shadows.",
+      "hint": "vec3 ambient = vec3(0.2, 0.25, 0.3) * ao; vec3 diffuse = vec3(1.0, 0.9, 0.8) * diff * ao;",
+      "solution": "float mapSceneAOTest(in vec3 p) {\n  return min(length(p - vec3(0.0, 0.5, 0.0)) - 0.5, p.y);\n}\nfloat calcAOCustom(in vec3 pos, in vec3 nor) {\n  float occ = 0.0; float sca = 1.0;\n  for (int i = 0; i < 5; i++) {\n    float h = 0.01 + 0.12 * float(i) / 4.0;\n    float d = mapSceneAOTest(pos + h * nor);\n    occ += (h - d) * sca; sca *= 0.9;\n  }\n  return clamp(1.0 - 2.0 * occ, 0.0, 1.0);\n}\nvoid mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  vec3 ro = vec3(0.0, 1.0, 2.5);\n  vec3 rd = normalize(vec3(uv.x, uv.y - 0.1, -1.5));\n  float t = 0.0;\n  for (int i = 0; i < 60; i++) {\n    float d = mapSceneAOTest(ro + rd * t);\n    if (d < 0.001) break;\n    t += d;\n  }\n  if (t < 8.0) {\n    vec3 p = ro + rd * t;\n    vec3 N = vec3(0,1,0);\n    if (p.y > 0.01) N = normalize(p - vec3(0.0, 0.5, 0.0));\n    float ao = calcAOCustom(p, N);\n    fragColor = vec4(vec3(ao), 1.0);\n  } else {\n    fragColor = vec4(0.02, 0.02, 0.04, 1.0);\n  }\n}"
+    },
+    "markdownDoc": "# SDF Ambient Occlusion (Alex Evans Method)\n\n## 1. Mathematical Formulation\nOn a completely flat plane, sampling distance at offset $h$ along the surface normal $\\mathbf{N}$ yields $f(\\mathbf{p} + h\\mathbf{N}) = h$.\nWhen nearby geometry occludes ambient sky radiance (e.g. a sphere resting on a plane), $f(\\mathbf{p} + h\\mathbf{N}) < h$. The missing distance $h - d$ directly quantifies geometric occlusion:\n\n$$\\text{AO}(\\mathbf{p}, \\mathbf{N}) = 1.0 - k \\sum_{i=1}^M w_i \\left( h_i - f(\\mathbf{p} + h_i \\mathbf{N}) \\right)$$"
+  },
+  {
+    "id": "aces-tonemapping-hero",
+    "section": "10. 3D Raymarching & Physical Shading (Hero)",
+    "name": "ACES Film Tonemapping & Gamma 2.2",
+    "description": "The Hero Finale: Converting unbounded HDR physical radiance into photographic film sRGB using the ACES curve and 2.2 gamma correction.",
+    "orderIndex": 38,
+    "difficulty": "Hero",
+    "glsl": "// Narkowicz 2015 fitted ACES Film curve (Academy Color Encoding System)\nvec3 acesFilm(in vec3 x) {\n  const float a = 2.51;\n  const float b = 0.03;\n  const float c = 2.43;\n  const float d = 0.59;\n  const float e = 0.14;\n  return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);\n}\n\n// Linear sRGB to sRGB display gamma 2.2\nvec3 linearToScreen(in vec3 col) {\n  return pow(col, vec3(1.0 / 2.2));\n}",
+    "defaultParams": {},
+    "previewMain": "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  // High Dynamic Range (HDR) radiance gradient peaking at 10.0 (super-white sun)\n  vec3 hdrColor = vec3(1.0, 0.6, 0.2) * (1.0 / (length(uv) * 0.5 + 0.05));\n  \n  // Split comparison: Left = Naive clamp; Right = Photographic ACES Tonemapping\n  vec3 result = (uv.x < 0.0) ? clamp(hdrColor, 0.0, 1.0) : acesFilm(hdrColor * 0.4);\n  \n  // Apply final Gamma 2.2 correction\n  fragColor = vec4(linearToScreen(result), 1.0);\n}",
+    "challenge": {
+      "prompt": "Observe the sun burnout difference: left shows harsh color clamping artifacts; right preserves smooth filmic highlight rolloff.",
+      "hint": "Compare clamping vs ACES curve on high dynamic range radiance.",
+      "solution": "vec3 acesFilmTest(in vec3 x) {\n  return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);\n}\nvoid mainImage(out vec4 fragColor, in vec2 fragCoord) {\n  vec2 uv = (2.0 * fragCoord - u_resolution.xy) / u_resolution.y;\n  vec3 hdr = vec3(1.5, 0.9, 0.3) / (length(uv) * 0.4 + 0.04);\n  vec3 mapped = acesFilmTest(hdr * 0.3);\n  fragColor = vec4(pow(mapped, vec3(1.0 / 2.2)), 1.0);\n}"
+    },
+    "markdownDoc": "# ACES Film Tonemapping & Photographic Color Grading\n\n## 1. Linear vs. Gamma Pipeline & HDR Radiance\nPhysical light calculation operates in **Linear Space** where radiant flux is additive: doubling light doubles photon energy.\nStandard computer monitors, however, apply a non-linear transfer function $V \\approx I^{2.2}$ (Cathode Ray Tube legacy and human eye Weber-Fechner perception).\nIf linear light is displayed directly without gamma decoding, shadows become unnaturally dark and highlights crush.\n\n## 2. The ACES Filmic S-Curve\nThe Academy Color Encoding System (ACES) applies a sigmoidal film response:\n- Gentle shadow toe (preserves low-light contrast).\n- Linear midtone contrast.\n- Smooth highlight shoulder rolloff (prevents harsh color blowout when $I > 1.0$).\n\n$$f(x) = \\frac{x(a x + b)}{x(c x + d) + e}$$"
+  }
+]
